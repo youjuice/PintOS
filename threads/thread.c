@@ -63,9 +63,12 @@ static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
 
-/* Custom */
+/* Custom Function */
 void thread_sleep(int64_t ticks);
 void thread_wakeup(int64_t ticks);
+int64_t get_global_ticks(void);
+void update_global_ticks(int64_t ticks);
+
 static struct list sleep_list;
 int64_t global_ticks;
 
@@ -119,11 +122,13 @@ thread_init (void) {
 	list_init (&sleep_list);
 	list_init (&destruction_req);
 
+	global_ticks = INT64_MAX;
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
 	init_thread (initial_thread, "main", PRI_DEFAULT);
 	initial_thread->status = THREAD_RUNNING;
 	initial_thread->tid = allocate_tid ();
+	initial_thread->local_ticks = 0;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -616,23 +621,23 @@ void thread_sleep(int64_t ticks)
 		list_push_back (&sleep_list, &curr->elem);		
 		curr->status = THREAD_BLOCKED;
 		curr->local_ticks = ticks;						// 재울 시간 저장
-
-		schedule();
 	}
+	update_global_ticks(ticks);							// 최소 tick 값 갱신
+	schedule();
 	intr_set_level(old_level);
 }
 
 void thread_wakeup(int64_t ticks)
 {
 	enum intr_level old_level;
-	struct list_elem *curr_elem;
-
 	old_level = intr_disable();
 
+	struct list_elem *curr_elem = list_begin(&sleep_list);
+
 	/* 1. sleep_list 순회 (list_begin부터 list_end까지)
-	   2. 깨워야 할 스레드를 찾으면, (현재 시간 > 재울 시간)
+	   2. 깨워야 할 스레드를 찾으면, (깨어나야 하는 시간 > 재운 시간)
 	   3. sleep_list에서 제거하고 ready_list에 삽입 */
-	for (curr_elem = list_begin(&sleep_list); curr_elem != list_end(&sleep_list);)
+	while (curr_elem != list_end(&sleep_list))
 	{
 		struct thread *curr_thread = list_entry(curr_elem, struct thread, elem);	// 해당 리스트 포인터가 가리키는 스레드
 
@@ -643,7 +648,20 @@ void thread_wakeup(int64_t ticks)
 			list_push_back(&ready_list, &curr_thread->elem);	// ready_list에 삽입
 		}
 		else
+		{		
 			curr_elem = list_next(curr_elem);					// 다음 노드로 이동
+		}
+		update_global_ticks(curr_thread->local_ticks);			// 최소 tick 값 갱신		
 	}
 	intr_set_level(old_level);
+}
+
+int64_t get_global_ticks(void)
+{
+	return global_ticks;
+}
+
+void update_global_ticks(int64_t ticks)
+{
+	global_ticks = global_ticks > ticks ? global_ticks : ticks;
 }
