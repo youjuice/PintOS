@@ -63,8 +63,13 @@ static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
 
-/* Custom */
-static void thread_sleep(int64_t ticks);
+/* Custom Function */
+void thread_sleep(int64_t ticks);
+void thread_wakeup(int64_t ticks);
+int64_t get_global_ticks(void);
+void update_global_ticks(int64_t ticks);
+int64_t find_min_less (struct list_elem *e,struct list_elem *min, int64_t global_tick );
+
 static struct list sleep_list;
 int64_t global_ticks;
 
@@ -118,11 +123,13 @@ thread_init (void) {
 	list_init (&sleep_list);
 	list_init (&destruction_req);
 
+	global_ticks = INT64_MAX;
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
 	init_thread (initial_thread, "main", PRI_DEFAULT);
 	initial_thread->status = THREAD_RUNNING;
 	initial_thread->tid = allocate_tid ();
+	initial_thread->local_ticks = 0;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -168,14 +175,6 @@ void
 thread_print_stats (void) {
 	printf ("Thread: %lld idle ticks, %lld kernel ticks, %lld user ticks\n",
 			idle_ticks, kernel_ticks, user_ticks);
-}
-
-/* Debugging */
-void
-thread_print_info (struct thread *thr)
-{
-	printf ("Thread: %d Status: %s Name: %s Priority: %d Local Ticks: %d\n", 
-	thr->tid, thr->status, thr->name, thr->priority, thr->local_ticks);
 }
 
 /* Creates a new kernel thread named NAME with the given initial
@@ -544,30 +543,30 @@ thread_launch (struct thread *th) {
  * It's not safe to call printf() in the schedule(). */
 static void
 do_schedule(int status) {
-	ASSERT (intr_get_level () == INTR_OFF);
-	ASSERT (thread_current()->status == THREAD_RUNNING);
-	while (!list_empty (&destruction_req)) {
+	ASSERT (intr_get_level () == INTR_OFF);											// 인터럽트가 비활성화 상태인지 체크
+	ASSERT (thread_current()->status == THREAD_RUNNING);							// 실행 중인 스레드인지 체크
+	while (!list_empty (&destruction_req)) {										// 종료된 스레드들 리스트 확인해서
 		struct thread *victim =
-			list_entry (list_pop_front (&destruction_req), struct thread, elem);
-		palloc_free_page(victim);
+			list_entry (list_pop_front (&destruction_req), struct thread, elem);	// 스레드 구조체로 변환해서
+		palloc_free_page(victim);													// 삭제
 	}
-	thread_current ()->status = status;
-	schedule ();
+	thread_current ()->status = status;												// 현재 스레드 상태 변경해주고,
+	schedule ();																	// 스케쥴링
 }
 
 static void
 schedule (void) {
-	struct thread *curr = running_thread ();
-	struct thread *next = next_thread_to_run ();
+	struct thread *curr = running_thread ();							// 현재 스레드 저장
+	struct thread *next = next_thread_to_run ();						// 다음 실행할 스레드 저장
 
-	ASSERT (intr_get_level () == INTR_OFF);
+	ASSERT (intr_get_level () == INTR_OFF);				
 	ASSERT (curr->status != THREAD_RUNNING);
-	ASSERT (is_thread (next));
+	ASSERT (is_thread (next));				
 	/* Mark us as running. */
-	next->status = THREAD_RUNNING;
+	next->status = THREAD_RUNNING;								
 
-	/* Start new time slice. */
-	thread_ticks = 0;
+	/* Start new time slice. */	
+	thread_ticks = 0;													// 새로운 스레드를 실행할 때 타임 슬라이스 계산을 새로 시작해야 함!!								
 
 #ifdef USERPROG
 	/* Activate the new address space. */
@@ -614,41 +613,57 @@ void thread_sleep(int64_t ticks)
 	struct thread *curr = thread_current();
 	enum intr_level old_level;
 
-	ASSERT(intr_get_level() == INTR_OFF);
 	old_level = intr_disable();
 
-	/* if the current thread is not idle thread,
-		change the state of the caller thread to BLOCKED, 
-		store the local tick to wake up, 
-		update the global tick if necessary, 
-		and call schedule() */
 	/* 1. 만약 현재 스레드가 idle thread가 아니라면 BLOCKED로 상태 변경
 	   2. 깨워야 하는 시간, 즉 local ticks 값 저장 -> 최솟값 업데이트??
 	   3. schedule 함수 호출 (스레드 스케쥴링) */
 	if (curr != idle_thread) {
-		curr->status = THREAD_BLOCKED;
-		curr->local_ticks = timer_ticks() + ticks;		// 깨어나야 하는 시간 = 현재 시간 + 재운 시간
 		list_push_back (&sleep_list, &curr->elem);		
-
-		if (global_ticks > curr->local_ticks)			// 최소 tick 값 저장 (깨울 때 필요)
-			global_ticks = curr->local_ticks;
-		
-		thread_print_info(curr);						// Debugging
+		curr->status = THREAD_BLOCKED;
+		curr->local_ticks = ticks;						// 재울 시간 저장
 	}
-
+	update_global_ticks(ticks);							// 최소 tick 값 갱신
 	schedule();
 	intr_set_level(old_level);
 }
 
 void thread_wakeup(int64_t ticks)
 {
-	struct thread *curr = thread_current();
 	enum intr_level old_level;
 
-	ASSERT(intr_get_level() == INTR_OFF);
-	old_level = intr_disable();
+	if(!list_empty(&sleep_list))
+	{
+		// 리스트에서 local_tick이 최소인 스레드 가져옴
+		struct thread *min_thread = list_entry(list_min(&sleep_list, find_min_less, NULL), struct thread, elem);
+		
+		if(min_thread->local_ticks <= ticks)
+		{
+			old_level = intr_disable(); // 인터럽트 비활성화
+			
+			min_thread->status = THREAD_READY;		
+			list_remove(&min_thread->elem);
+			list_push_back(&ready_list, &min_thread->elem);
 
-	/* 1. 만약 현재 스레드가 sleep_list에 있다면, READY로 상태 변경
-	   2. sleep_list에서 제거하고 ready_list에 삽입 
-	   3. wakeup 할 때는 ticks 값 업데이트 해줄 필요 X */
+			intr_set_level(old_level);
+		}
+	}
+}
+
+int64_t get_global_ticks(void)
+{
+	return global_ticks;
+}
+
+void update_global_ticks(int64_t ticks)
+{
+	global_ticks = global_ticks > ticks ? global_ticks : ticks;
+}
+
+int64_t find_min_less (struct list_elem *e,struct list_elem *min, int64_t global_tick )
+{
+	int64_t a = list_entry(e, struct thread, elem)->local_ticks;
+	int64_t b = list_entry(min, struct thread, elem)->local_ticks;
+
+	return a < b;
 }
