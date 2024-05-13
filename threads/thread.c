@@ -330,9 +330,13 @@ thread_yield (void) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
-	thread_current ()->priority = new_priority;
-	// ready_list 재정렬
-	list_sort(&ready_list, cmp_priority, NULL);
+	
+	thread_current()->priority = new_priority;
+	struct list_elem *max_priority = list_max(&ready_list, cmp_priority, NULL);
+	int priority = list_entry(max_priority, struct thread, elem)->priority;
+
+	if (new_priority < priority)
+		thread_preempt();
 }
 
 /* Returns the current thread's priority. */
@@ -677,16 +681,6 @@ int64_t get_global_ticks(void)
 void set_global_ticks(int64_t ticks)
 {
 	global_ticks = global_ticks > ticks ? global_ticks : ticks;
-}
-
-int64_t get_priority(void)
-{
-	return thread_current()->priority;
-}
-
-void set_priority(int64_t new_priority)
-{
-	thread_current()->priority = new_priority;
 }
 
 bool 
