@@ -138,6 +138,8 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;							// 타이머 인터럽트가 발생한 횟수 업데이트
 	thread_tick ();						// 현재 실행 중인 스레드의 실행 시간 측정
+
+	thread_wakeup(ticks);
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

@@ -86,15 +86,19 @@ typedef int tid_t;
  * ready state is on the run queue, whereas only a thread in the
  * blocked state is on a semaphore wait list. */
 struct thread {
-	/* Owned by thread.c. */
-	tid_t tid;                          /* Thread identifier. */
-	enum thread_status status;          /* Thread state. */
-	char name[16];                      /* Name (for debugging purposes). */
-	int priority;                       /* Priority. */
-	int64_t local_ticks;				/* Local Ticks */
+    /* Owned by thread.c. */
+    tid_t tid;                          /* Thread identifier. */
+    enum thread_status status;          /* Thread state. */
+    char name[16];                      /* Name (for debugging purposes). */
+    int priority;                       /* Priority. */
+	int origin_priority;
+    int64_t local_ticks;                /* Local Ticks */
 
-	/* Shared between thread.c and synch.c. */
-	struct list_elem elem;              /* List element. */
+    /* Shared between thread.c and synch.c. */
+    struct list_elem elem;              /* List element. */
+    struct lock *wait_on_lock;          /* 기다리고 있는 Lock */
+    struct list donations;              /* 해당 스레드에게 기부된 우선순위 리스트 */
+    struct list_elem d_elem;            /* Donation List element */
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -144,4 +148,19 @@ int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
 
+void thread_sleep(int64_t ticks);
+void thread_wakeup(int64_t ticks);
+
+/* Custom Function */
+void thread_sleep(int64_t ticks);
+void thread_wakeup(int64_t ticks);
+int64_t get_global_ticks(void);
+void set_global_ticks(int64_t ticks);
+bool cmp_priority(const struct list_elem *elem_h, const struct list_elem *elem_l, void *aux UNUSED);
+bool cmp_ticks(const struct list_elem *elem_h, const struct list_elem *elem_l, void *aux UNUSED);
+
+bool 
+cmp_priority(const struct list_elem *elem_h, const struct list_elem *elem_l, void *aux UNUSED);
+bool 
+cmp_ticks(const struct list_elem *elem_l, const struct list_elem *elem_h, void *aux UNUSED);
 #endif /* threads/thread.h */
