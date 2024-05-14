@@ -66,7 +66,6 @@ static tid_t allocate_tid (void);
 /* Custom Function */
 void thread_sleep(int64_t ticks);
 void thread_wakeup(int64_t ticks);
-void thread_preempt(void);
 int64_t get_global_ticks(void);
 void set_global_ticks(int64_t ticks);
 bool cmp_priority(const struct list_elem *elem_h, const struct list_elem *elem_l, void *aux UNUSED);
@@ -140,8 +139,7 @@ thread_start (void) {
 	/* Create the idle thread. */
 	struct semaphore idle_started;
 	sema_init (&idle_started, 0);
-	// thread_create ("idle", PRI_MIN, idle, &idle_started);
-	thread_create ("idle", PRI_DEFAULT, idle, &idle_started);
+	thread_create ("idle", PRI_MIN, idle, &idle_started);
 
 	/* Start preemptive thread scheduling. */
 	intr_enable ();
@@ -224,10 +222,7 @@ thread_create (const char *name, int priority,
 
 	/* Add to run queue. */
 	thread_unblock (t);
-	
-	struct thread *curr_thread = thread_current();
-	if (t->priority > curr_thread->priority)
-		thread_yield();
+	thread_preempt();
 
 	return tid;
 }
@@ -336,14 +331,12 @@ thread_yield (void) {
 void
 thread_set_priority (int new_priority) {
 	
-	thread_current()->origin_priority = new_priority;
-	// struct list_elem *max_priority = list_max(&ready_list, cmp_priority, NULL);
-	// int priority = list_entry(max_priority, struct thread, elem)->priority;
+	thread_current()->priority = new_priority;
+	struct list_elem *max_priority = list_max(&ready_list, cmp_priority, NULL);
+	int priority = list_entry(max_priority, struct thread, elem)->priority;
 
-	// // if (new_priority < priority)
-	// // 	thread_preempt();
-	// update_priority();
-	thread_preempt();
+	if (new_priority < priority)
+		thread_preempt();
 }
 
 /* Returns the current thread's priority. */
@@ -440,10 +433,8 @@ init_thread (struct thread *t, const char *name, int priority) {
 	strlcpy (t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
-	t->origin_priority = priority;
+	// t->origin_priority = priority;
 	t->magic = THREAD_MAGIC;
-	t->wait_on_lock = NULL;
-	list_init(&t->donations);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -675,28 +666,12 @@ void thread_preempt(void)
 	if (thread_current() == idle_thread) return;
 	if (list_empty(&ready_list)) return;
 
-	// list_sort(&ready_list, cmp_priority, NULL);
 	struct thread *curr = thread_current();
 	struct thread *next = list_entry(list_begin(&ready_list), struct thread, elem);
 
 	if (next->priority > curr->priority)
 		thread_yield();
 }
-
-// void thread_preempt()
-// {
-// 	enum intr_level old_level = intr_disable();
-// 	list_sort(&ready_list, cmp_priority, NULL);
-
-// 	struct thread *cur = thread_current();
-// 	if (!list_empty(&ready_list) && cur->priority < list_entry(list_front(&ready_list)
-// 														, struct thread, elem)->priority)
-// 	{
-// 		thread_yield();
-// 	}
-// 	intr_set_level(old_level);
-	
-// }
 
 int64_t get_global_ticks(void)
 {

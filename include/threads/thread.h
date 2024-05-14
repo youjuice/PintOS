@@ -91,7 +91,7 @@ struct thread {
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
     int priority;                       /* Priority. */
-	int origin_priority;
+	int origin_priority;				/* Origin Priority */
     int64_t local_ticks;                /* Local Ticks */
 
     /* Shared between thread.c and synch.c. */
@@ -154,6 +154,7 @@ void thread_wakeup(int64_t ticks);
 /* Custom Function */
 void thread_sleep(int64_t ticks);
 void thread_wakeup(int64_t ticks);
+void thread_preempt(void);
 int64_t get_global_ticks(void);
 void set_global_ticks(int64_t ticks);
 bool cmp_priority(const struct list_elem *elem_h, const struct list_elem *elem_l, void *aux UNUSED);
