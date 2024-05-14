@@ -332,11 +332,8 @@ void
 thread_set_priority (int new_priority) {
 	
 	thread_current()->priority = new_priority;
-	struct list_elem *max_priority = list_max(&ready_list, cmp_priority, NULL);
-	int priority = list_entry(max_priority, struct thread, elem)->priority;
-
-	if (new_priority < priority)
-		thread_preempt();
+	
+	thread_preempt();
 }
 
 /* Returns the current thread's priority. */
@@ -433,8 +430,10 @@ init_thread (struct thread *t, const char *name, int priority) {
 	strlcpy (t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
-	// t->origin_priority = priority;
+	t->origin_priority = priority;
 	t->magic = THREAD_MAGIC;
+	t->wait_on_lock = NULL;
+	list_init(&t->donations);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
