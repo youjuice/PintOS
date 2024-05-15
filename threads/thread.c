@@ -258,7 +258,6 @@ thread_unblock (struct thread *t) {
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
 	list_insert_ordered(&ready_list, &t->elem, cmp_priority, NULL);
-	// list_push_back (&ready_list, &t->elem);
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
@@ -321,8 +320,8 @@ thread_yield (void) {
 
 	old_level = intr_disable ();					// 인터럽트 비활성화
 	if (curr != idle_thread)						// idle thread가 아니라면
-		// list_push_back (&ready_list, &curr->elem);	// ready_list에 현재 스레드 추가
 		list_insert_ordered(&ready_list, &curr->elem, cmp_priority, NULL);
+
 	do_schedule (THREAD_READY);						// 스케쥴러 호출
 	intr_set_level (old_level);						// 이전에 저장한 인터럽트 레벨 복원
 }
@@ -331,8 +330,9 @@ thread_yield (void) {
 void
 thread_set_priority (int new_priority) {
 	
-	thread_current()->priority = new_priority;
-	
+	thread_current()->origin_priority = new_priority;
+
+	update_priority();
 	thread_preempt();
 }
 
@@ -652,10 +652,9 @@ void thread_wakeup(int64_t ticks)
 			thread_unblock(curr_thread);
 		}
 		else
-		{		
 			curr_elem = list_next(curr_elem);					                            // 다음 노드로 이동
-		}
-		set_global_ticks(curr_thread->local_ticks);			                      		// 최소 tick 값 갱신		
+		
+		set_global_ticks(curr_thread->local_ticks);			                      			// 최소 tick 값 갱신		
 	}
 	intr_set_level(old_level);
 }
