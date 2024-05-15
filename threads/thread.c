@@ -68,8 +68,8 @@ void thread_sleep(int64_t ticks);
 void thread_wakeup(int64_t ticks);
 int64_t get_global_ticks(void);
 void set_global_ticks(int64_t ticks);
-bool cmp_priority(const struct list_elem *elem_h, const struct list_elem *elem_l, void *aux UNUSED);
-bool cmp_ticks(const struct list_elem *elem_h, const struct list_elem *elem_l, void *aux UNUSED);
+bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+bool cmp_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
 static struct list sleep_list;
 int64_t global_ticks;
@@ -682,19 +682,19 @@ void set_global_ticks(int64_t ticks)
 }
 
 bool 
-cmp_priority(const struct list_elem *elem_h, const struct list_elem *elem_l, void *aux UNUSED)
+cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
-	const struct thread *thread_h = list_entry(elem_h, struct thread, elem);
-	const struct thread *thread_l = list_entry(elem_l, struct thread, elem);
+	const struct thread *thread_a = list_entry(a, struct thread, elem);
+	const struct thread *thread_b = list_entry(b, struct thread, elem);
 
-	return thread_h->priority > thread_l->priority;
+	return thread_a->priority > thread_b->priority;
 }
 
 bool 
-cmp_ticks(const struct list_elem *elem_l, const struct list_elem *elem_h, void *aux UNUSED)
+cmp_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
-	const struct thread *thread_l = list_entry(elem_l, struct thread, elem);
-	const struct thread *thread_h = list_entry(elem_h, struct thread, elem);
+	const struct thread *thread_a = list_entry(a, struct thread, elem);
+	const struct thread *thread_b = list_entry(b, struct thread, elem);
 
-	return thread_l->local_ticks < thread_h->local_ticks;
+	return thread_a->local_ticks < thread_b->local_ticks;
 }
