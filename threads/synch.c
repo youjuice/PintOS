@@ -383,7 +383,7 @@ void update_priority()
 
 	if (!list_empty(&curr_thread->donations))		// Consider Multiple Donation
 	{
-		struct thread *highest_donations = list_entry(list_front(&curr_thread->donations), struct thread, d_elem);		// 가장 높은 우선순위의 기부자
+		struct thread *highest_donations = list_entry(list_front(&curr_thread->donations), struct thread, d_elem);
 
 		if (highest_donations->priority > curr_thread->priority)
 			curr_thread->priority = highest_donations->priority;
