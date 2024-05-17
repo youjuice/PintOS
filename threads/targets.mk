@@ -6,4 +6,5 @@ threads_SRC += threads/synch.c		# Synchronization.
 threads_SRC += threads/palloc.c		# Page allocator.
 threads_SRC += threads/malloc.c		# Subpage allocator.
 threads_SRC += threads/start.S		# Startup code.
-threads_SRC += threads/mmu.c		    # Memory management unit related things.
+threads_SRC += threads/mmu.c		# Memory management unit related things.
+threads_SRC += threads/fixed-point.c

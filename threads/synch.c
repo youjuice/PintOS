@@ -196,13 +196,14 @@ lock_acquire (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
-	
+
 	struct thread *curr_thread = thread_current();
+
 	if (lock->holder != NULL)						// lock을 이미 점유하고 있는 스레드가 있다면,
 	{
 		curr_thread->wait_on_lock = lock;			// 현재 wait_on_lock에 lock 추가
 		list_insert_ordered(&lock->holder->donations, &curr_thread->d_elem, cmp_priority, NULL);
-		donate_priority();							// 우선순위 기부
+		if (!thread_mlfqs)	donate_priority();		// 우선순위 기부
 	}
 
 	sema_down (&lock->semaphore);
@@ -240,18 +241,20 @@ lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
-	// 1. lock을 잡고 있던 스레드를 기부 리스트를 순회하며 삭제 (Multiple Donation!!)
-	struct thread *curr_thread = thread_current();			
-	for (struct list_elem *e = list_begin(&curr_thread->donations); e != list_end(&curr_thread->donations); e = list_next(e))
+	if (!thread_mlfqs)
 	{
-		struct thread *e_thread = list_entry(e, struct thread, d_elem);
-		if (e_thread->wait_on_lock == lock)									// 해당 스레드가 대기하고 있던 lock이 release된 lock이라면,
-			list_remove(&e_thread->d_elem);									// 기부 리스트에서 삭제
+		// 1. lock을 잡고 있던 스레드를 기부 리스트를 순회하며 삭제 (Multiple Donation!!)
+		struct thread *curr_thread = thread_current();			
+		for (struct list_elem *e = list_begin(&curr_thread->donations); e != list_end(&curr_thread->donations); e = list_next(e))
+		{
+			struct thread *e_thread = list_entry(e, struct thread, d_elem);
+			if (e_thread->wait_on_lock == lock)									// 해당 스레드가 대기하고 있던 lock이 release된 lock이라면,
+				list_remove(&e_thread->d_elem);									// 기부 리스트에서 삭제
+		}
+
+		// 2. 원래 우선 순위로 돌아가야 함
+		update_priority();
 	}
-
-	// 2. 원래 우선 순위로 돌아가야 함
-	update_priority();
-
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
 }
@@ -356,7 +359,8 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 
 
 /* =========== Custom Function =========== */
-void donate_priority()
+void 
+donate_priority()
 {
 	struct thread *curr_thread = thread_current();								// 현재 스레드
 	
@@ -375,7 +379,8 @@ void donate_priority()
 	}
 }
 
-void update_priority()
+void 
+update_priority()
 {
 	struct thread *curr_thread = thread_current();
 
