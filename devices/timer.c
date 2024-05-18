@@ -141,13 +141,12 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 	{
 		increase_recent_cpu();
 
-		if (timer_ticks() % 4 == 0)
-			recalculate_priority();
-
 		if (timer_ticks() % TIMER_FREQ == 0) {
-			calculate_load_avg();
+			calculate_load_avg(thread_current());
 			recalculate_recent_cpu();
 		}
+		if (timer_ticks() % 4 == 0)
+			recalculate_priority();
 	}
 	thread_wakeup(ticks);
 }

@@ -100,7 +100,7 @@ struct thread {
     struct lock *wait_on_lock;          /* 기다리고 있는 Lock */
     struct list donations;              /* 해당 스레드에게 기부된 우선순위 리스트 */
     struct list_elem d_elem;            /* Donation List element */
-    struct list_elem a_elem;            /* All element */
+    struct list_elem a_elem;            /* All List element */
 
     /* Project 1.3 */
     int nice;                           /* nice Value */
@@ -154,19 +154,21 @@ int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
 
-/* Custom Function 1.2 */
+/* Custom Function 1.1 */
 void thread_sleep(int64_t ticks);
 void thread_wakeup(int64_t ticks);
-void thread_preempt(void);
 int64_t get_global_ticks(void);
 void set_global_ticks(int64_t ticks);
-bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 bool cmp_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+
+/* Custom Function 1.2 */
+void thread_preempt(void);
+bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
 /* Custom Function 1.3 */
 void calculate_priority(struct thread *t);
 void calculate_recent_cpu(struct thread *t);
-void calculate_load_avg(void);
+void calculate_load_avg(struct thread *t);
 void increase_recent_cpu(void);
 void recalculate_priority(void);
 void recalculate_recent_cpu(void);

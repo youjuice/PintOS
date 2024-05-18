@@ -76,7 +76,7 @@ bool cmp_ticks(const struct list_elem *a, const struct list_elem *b, void *aux U
 /* Custom Function 1.3 */
 void calculate_priority(struct thread *t);
 void calculate_recent_cpu(struct thread *t);
-void calculate_load_avg(void);
+void calculate_load_avg(struct thread *t);
 void increase_recent_cpu(void);
 void recalculate_priority(void);
 void recalculate_recent_cpu(void);
@@ -323,7 +323,7 @@ thread_exit (void) {
 	/* Just set our status to dying and schedule another process.
 	   We will be destroyed during the call to schedule_tail(). */
 	intr_disable ();
-	list_remove(&thread_current()->a_elem);
+	list_remove(&thread_current()->a_elem);			// thread가 DYING 상태가 되면, all_list에서 삭제!!
 	do_schedule (THREAD_DYING);
 	NOT_REACHED ();
 }
@@ -656,7 +656,8 @@ allocate_tid (void) {
 	return tid;
 }
 
-/* =========== Custom Function =========== */
+
+/* =========== Project 1.1 - Custom Function =========== */
 void 
 thread_sleep(int64_t ticks)
 {
@@ -703,19 +704,6 @@ thread_wakeup(int64_t ticks)
 	intr_set_level(old_level);
 }
 
-void 
-thread_preempt(void)
-{
-	if (thread_current() == idle_thread) return;
-	if (list_empty(&ready_list)) 		 return;
-
-	struct thread *curr = thread_current();
-	struct thread *next = list_entry(list_begin(&ready_list), struct thread, elem);
-
-	if (next->priority > curr->priority)
-		thread_yield();
-}
-
 int64_t 
 get_global_ticks(void)
 {
@@ -729,6 +717,30 @@ set_global_ticks(int64_t ticks)
 }
 
 bool 
+cmp_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+{
+	const struct thread *thread_a = list_entry(a, struct thread, elem);
+	const struct thread *thread_b = list_entry(b, struct thread, elem);
+
+	return thread_a->local_ticks < thread_b->local_ticks;
+}
+
+
+/* =========== Project 1.2 - Custom Function =========== */
+void 
+thread_preempt(void)
+{
+	if (thread_current() == idle_thread) return;
+	if (list_empty(&ready_list)) 		 return;
+
+	struct thread *curr = thread_current();
+	struct thread *next = list_entry(list_begin(&ready_list), struct thread, elem);
+
+	if (next->priority > curr->priority)
+		thread_yield();
+}
+
+bool 
 cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
 	const struct thread *thread_a = list_entry(a, struct thread, elem);
@@ -737,14 +749,6 @@ cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNU
 	return thread_a->priority > thread_b->priority;
 }
 
-bool 
-cmp_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
-{
-	const struct thread *thread_a = list_entry(a, struct thread, elem);
-	const struct thread *thread_b = list_entry(b, struct thread, elem);
-
-	return thread_a->local_ticks < thread_b->local_ticks;
-}
 
 /* =========== Project 1.3 - Custom Function =========== */
 /* 
@@ -774,12 +778,12 @@ calculate_recent_cpu(struct thread *t)
 }
 
 void 
-calculate_load_avg(void)
+calculate_load_avg(struct thread *t)
 {
 	// load_avg = (59 / 60) * load_avg + (1 / 60) * ready_threads
 	int ready_threads;
-	if (thread_current() == idle_thread)	ready_threads = list_size(&ready_list);			// idle thread일 경우에는 0
-	else									ready_threads = list_size(&ready_list) + 1;		// ready_list에 있는 스레드 + 1 (실행 중인 스레드)
+	if (t == idle_thread)	ready_threads = list_size(&ready_list);			// idle thread일 경우에는 0
+	else					ready_threads = list_size(&ready_list) + 1;		// ready_list에 있는 스레드 + 1 (실행 중인 스레드)
 	
     load_avg = add_fp(divide_fp_int(multi_fp_int(load_avg, 59), 60), divide_fp_int(int_to_fp(ready_threads), 60));
 }
