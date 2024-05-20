@@ -84,6 +84,7 @@ void recalculate_recent_cpu(void);
 /* Custom Variable*/
 struct list sleep_list;
 struct list all_list;
+
 int64_t global_ticks;
 int load_avg;
 
@@ -145,6 +146,7 @@ thread_init (void) {
 	list_push_back(&all_list, &initial_thread->a_elem);
 	initial_thread->status = THREAD_RUNNING;
 	initial_thread->tid = allocate_tid ();
+	initial_thread->local_ticks = 0;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
