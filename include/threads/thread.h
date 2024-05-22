@@ -154,6 +154,7 @@ int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
 
+
 /* Custom Function 1.1 */
 void thread_sleep(int64_t ticks);
 void thread_wakeup(int64_t ticks);
@@ -174,3 +175,4 @@ void recalculate_priority(void);
 void recalculate_recent_cpu(void);
 
 #endif /* threads/thread.h */
+
