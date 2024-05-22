@@ -162,7 +162,7 @@ paging_init (uint64_t mem_end) {
 		if ((pte = pml4e_walk (pml4, va, 1)) != NULL)
 			*pte = pa | perm;
 	}
-
+	
 	// reload cr3
 	pml4_activate(0);
 }

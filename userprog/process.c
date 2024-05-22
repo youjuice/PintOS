@@ -26,8 +26,13 @@ static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
+static void argument_stack(char *argv[], int argc, struct intr_frame *_if);
 
 /* General process initializer for initd and other process. */
+/* 
+ * initd : 시스템 부팅 과정에서 최초로 실행되는 유저 모드 프로세스
+ * process_init : initd 및 다른 프로세스를 위한 일반적인 프로세스 초기화 함수
+ */
 static void
 process_init (void) {
 	struct thread *current = thread_current ();
@@ -38,41 +43,52 @@ process_init (void) {
  * before process_create_initd() returns. Returns the initd's
  * thread id, or TID_ERROR if the thread cannot be created.
  * Notice that THIS SHOULD BE CALLED ONCE. */
+/*
+ * - 이 함수는 FILE_NAME에서 로드된 initd라는 첫번째 유저 프로그램을 시작
+ * - 새 스레드가 생성되고 process_create_initd 함수가 반환되기 전에 스케줄링되거나 종료될 수 있음
+ * - 함수는 initd의 스레드 ID를 반환하며 스레드를 생성할 수 없는 경우 TID_ERROR 반환
+ * - 이 함수는 한번만 호출되어야 함!!
+ */
 tid_t
 process_create_initd (const char *file_name) {
-	char *fn_copy;
-	tid_t tid;
+	char *fn_copy;		// FILE_NAME의 복사본을 저장할 포인터
+	tid_t tid;			// 새로 생성된 스레드 ID를 저장할 변수
 
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
-	fn_copy = palloc_get_page (0);
-	if (fn_copy == NULL)
-		return TID_ERROR;
-	strlcpy (fn_copy, file_name, PGSIZE);
+	fn_copy = palloc_get_page (0);			// 페이지를 할당하여 FILE_NAME의 복사본을 저장할 메모리 확보
+	if (fn_copy == NULL)					// 메모리 할당에 실패한 경우,
+		return TID_ERROR;					// TID_ERROR 반환
+	strlcpy (fn_copy, file_name, PGSIZE);	// FIME_NAME을 fn_copy로 복사
 
 	/* Create a new thread to execute FILE_NAME. */
-	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
-	if (tid == TID_ERROR)
-		palloc_free_page (fn_copy);
-	return tid;
+	char *save_ptr;
+	strtok_r(file_name, " ", &save_ptr);
+
+	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);	// 스레드 생성
+	if (tid == TID_ERROR)											// 실패한 경우, 
+		palloc_free_page (fn_copy);									// fn_copy에 할당된 페이지 해제
+	return tid;														// 새로 생성된 스레드 ID 반환
 }
 
 /* A thread function that launches first user process. */
+/* 첫번째 사용자 프로세스를 시작하는 스레드 함수 */
 static void
 initd (void *f_name) {
 #ifdef VM
 	supplemental_page_table_init (&thread_current ()->spt);
 #endif
 
-	process_init ();
+	process_init ();						// 프로세스 초기화
 
-	if (process_exec (f_name) < 0)
-		PANIC("Fail to launch initd\n");
-	NOT_REACHED ();
+	if (process_exec (f_name) < 0)			// f_name에 지정된 프로그램 실행
+		PANIC("Fail to launch initd\n");	// 실패하면, 시스템 중지 및 오류 메세지 출력
+	NOT_REACHED ();		
 }
 
 /* Clones the current process as `name`. Returns the new process's thread id, or
  * TID_ERROR if the thread cannot be created. */
+/* 현재 프로세스를 name으로 복제하고 새 프로세스의 스레드 ID를 반환하는 함수 */
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
@@ -83,30 +99,37 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 #ifndef VM
 /* Duplicate the parent's address space by passing this function to the
  * pml4_for_each. This is only for the project 2. */
+/* pml4_for_each에 이 함수를 전달하여 부모의 주소 공간을 복제하는 함수 (for Project 2) */
 static bool
 duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	struct thread *current = thread_current ();
-	struct thread *parent = (struct thread *) aux;
-	void *parent_page;
-	void *newpage;
-	bool writable;
+	struct thread *parent = (struct thread *) aux;	// 부모 스레드를 가리키는 포인터를 aux에서 가져옴
+	void *parent_page;								// 부모 페이지를 가리킬 포인터
+	void *newpage;									// 새 페이지를 가리킬 포인터
+	bool writable;									// 새 페이지의 쓰기 가능 여부를 나타내는 변수
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
+	/* 1. TODO: 부모 페이지가 커널 페이지인 경우 즉시 반환 */
 
 	/* 2. Resolve VA from the parent's page map level 4. */
+	/* 2. 부모의 페이지 맵 레벨 4에서 VA 해결 */
 	parent_page = pml4_get_page (parent->pml4, va);
 
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
+	/* 3. TODO: 자식을 위한 새로운 PAL_USER 페이지를 할당하고 NEWPAGE에 결과 설정*/
 
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
+	/* 4. 부모의 페이지를 새 페이지로 복제하고 부모의 페이지가 쓰기 가능한지 확인 (결과에 따라 WRITABLE 설정)*/
 
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
+	/* 5. 주소 VA에 WRITABLE 권한으로 새 페이지를 자식의 페이지 테이블에 추가 */
 	if (!pml4_set_page (current->pml4, va, newpage, writable)) {
 		/* 6. TODO: if fail to insert page, do error handling. */
+		/* 6. TODO: 만약 실패한 경우 에러 처리 */
 	}
 	return true;
 }
@@ -116,30 +139,32 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
  * Hint) parent->tf does not hold the userland context of the process.
  *       That is, you are required to pass second argument of process_fork to
  *       this function. */
+/* 부모의 실행 컨텍스트를 복사하는 스레드 함수 */
 static void
 __do_fork (void *aux) {
-	struct intr_frame if_;
-	struct thread *parent = (struct thread *) aux;
-	struct thread *current = thread_current ();
+	struct intr_frame if_;		// 인터럽트가 발생했을 때 스레드의 상태를 저장하는 구조체
+	struct thread *parent = (struct thread *) aux;	// 보조 데이터로 전달된 포인터를 parent에 캐스팅
+	struct thread *current = thread_current ();		
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
 	struct intr_frame *parent_if;
 	bool succ = true;
 
 	/* 1. Read the cpu context to local stack. */
+	/* 1. 부모의 인터럽트 프레임을 현재 스레드의 인터럽트 프레임에 복사 */
 	memcpy (&if_, parent_if, sizeof (struct intr_frame));
 
 	/* 2. Duplicate PT */
-	current->pml4 = pml4_create();
-	if (current->pml4 == NULL)
+	current->pml4 = pml4_create();	// 새로운 페이지 테이블을 생성하여 현재 스레드의 페이지 맵 레벨 4에 할당
+	if (current->pml4 == NULL)		// 실패하면 error로 이동
 		goto error;
 
-	process_activate (current);
+	process_activate (current);		// 현재 스레드 활성화
 #ifdef VM
 	supplemental_page_table_init (&current->spt);
 	if (!supplemental_page_table_copy (&current->spt, &parent->spt))
 		goto error;
 #else
-	if (!pml4_for_each (parent->pml4, duplicate_pte, parent))
+	if (!pml4_for_each (parent->pml4, duplicate_pte, parent))	// 각 페이지 테이블 엔트리 복제
 		goto error;
 #endif
 
@@ -147,19 +172,23 @@ __do_fork (void *aux) {
 	 * TODO: Hint) To duplicate the file object, use `file_duplicate`
 	 * TODO:       in include/filesys/file.h. Note that parent should not return
 	 * TODO:       from the fork() until this function successfully duplicates
-	 * TODO:       the resources of parent.*/
+	 * TODO:       the resources of parent. */
+	/* - 파일을 복제하는 코드를 여기에 추가.
+	 * - 파일 객체를 복제하기 위해서는 file_duplicate 함수 사용 
+	 * - 부모는 이 함수가 부모의 리소스를 성공적으로 복제할 때까지 fork()에서 반환해서는 안됨. */
 
-	process_init ();
+	process_init ();		// 프로세스 초기화
 
 	/* Finally, switch to the newly created process. */
-	if (succ)
-		do_iret (&if_);
-error:
-	thread_exit ();
+	if (succ)				// 성공하면,
+		do_iret (&if_);		// 새로운 프로세스로 전환
+error:						// 오류 발생시,
+	thread_exit ();			// 스레드 종료
 }
 
 /* Switch the current execution context to the f_name.
  * Returns -1 on fail. */
+/* 주어진 파일 이름으로부터 실행 컨텍스트를 변경하여 새로운 프로세스를 시작하는 함수 */
 int
 process_exec (void *f_name) {
 	char *file_name = f_name;
@@ -168,27 +197,81 @@ process_exec (void *f_name) {
 	/* We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
 	 * it stores the execution information to the member. */
+	/* 인터럽트 프레임 설정 */
 	struct intr_frame _if;
-	_if.ds = _if.es = _if.ss = SEL_UDSEG;
-	_if.cs = SEL_UCSEG;
-	_if.eflags = FLAG_IF | FLAG_MBS;
+	_if.ds = _if.es = _if.ss = SEL_UDSEG;	// 사용자 데이터 세그먼트로 설정
+	_if.cs = SEL_UCSEG;						// 사용자 코드 세그먼트로 설정
+	_if.eflags = FLAG_IF | FLAG_MBS;		// 인터럽트 플래그와 모드 비트 설정
 
 	/* We first kill the current context */
-	process_cleanup ();
+	process_cleanup ();						// 현재 실행 중인 컨텍스트 정리
+
+	/* Parse the command line */
+	char *token_list[100];		// token을 저장할 리스트 
+	int token_index = 0;		// token index
+	char *token, *save_ptr;
+
+	for (token = strtok_r(file_name, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
+		token_list[token_index++] = token;
 
 	/* And then load the binary */
-	success = load (file_name, &_if);
+	success = load (file_name, &_if);		// 주어진 파일을 로드하여 새로운 프로세스 시작
 
 	/* If load failed, quit. */
-	palloc_free_page (file_name);
 	if (!success)
-		return -1;
+		return -1;			
+
+	/* Set up Stack & Push */ 
+	argument_stack(&token_list, token_index, &_if);
+
+	/* Debug Code */
+	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
+	
+	palloc_free_page (file_name);				// 페이지 해제
 
 	/* Start switched process. */
-	do_iret (&_if);
+	do_iret (&_if);							// _if에 저장된 새로운 실행 컨텍스트로 전환
 	NOT_REACHED ();
 }
 
+/* ======== Custom Function ======== */
+// 인수들을 스택 구조에 맞게 push 하는 함수
+static void
+argument_stack(char *argv[], int argc, struct intr_frame *_if)
+{
+	uintptr_t argv_address[argc];
+
+	// Section 1 : argv[i] 데이터 push
+	for (int i = argc - 1; i >= 0; i--)
+	{
+		_if->rsp -= (strlen(argv[i]) + 1);
+		memcpy(_if->rsp, argv[i], strlen(argv[i]) + 1);
+		argv_address[i] = _if->rsp;
+	}
+
+	// Section 2 : word-align (주소값 8의 배수로 맞춰주기)
+	while (_if->rsp % 8 != 0)
+	{
+		_if->rsp --;
+		memset(_if->rsp, 0, sizeof(uint8_t));
+	}
+
+	// Section 3 : argv[i] 주솟값 push
+	for (int i = argc; i >= 0; i--)
+	{
+		_if->rsp -= sizeof(uintptr_t);
+		if (i == argc)	memset(_if->rsp, 0, sizeof( uintptr_t));
+		else			memcpy(_if->rsp, &argv_address[i], sizeof(uintptr_t));
+	}
+
+	// Section 4 : %rsi, %rdi 세팅
+	_if->R.rsi = _if->rsp;
+	_if->R.rdi = argc;
+
+	// Section 5 : Return Address
+	_if->rsp -= sizeof(uintptr_t);
+	memset(_if->rsp, 0, sizeof(uintptr_t));
+}
 
 /* Waits for thread TID to die and returns its exit status.  If
  * it was terminated by the kernel (i.e. killed due to an
@@ -199,15 +282,27 @@ process_exec (void *f_name) {
  *
  * This function will be implemented in problem 2-2.  For now, it
  * does nothing. */
+/*
+ * 스레드 ID가 종료될 때까지 대기하고 종료 상태를 반환하는 함수
+ * 1. 만약 스레드가 커널에 의해 종료되었다면(예외) -1 반환
+ * 2. 만약 스레드 ID가 유효하지 않거나 호출하는 프로세스의 자식이 아니거나 
+ * 3. 이미 주어진 스레드 ID에 대해 process_wait()가 호출되었다면, 즉시 -1 반환
+ * -> 현재는 아무 동작도 하지 않고 그냥 -1 반환 (실제로 동작하도록 구현해라.)
+ */
 int
 process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+	for (int i = 0; i < 1000000000; i++)
+	{
+
+	}
 	return -1;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
+/* 프로세스를 종료하는 함수 thread_exit() 함수에 의해 호출 */
 void
 process_exit (void) {
 	struct thread *curr = thread_current ();
@@ -220,6 +315,7 @@ process_exit (void) {
 }
 
 /* Free the current process's resources. */
+/* 현재 프로세스의 자원을 정리하는 함수 */
 static void
 process_cleanup (void) {
 	struct thread *curr = thread_current ();
@@ -248,13 +344,14 @@ process_cleanup (void) {
 
 /* Sets up the CPU for running user code in the nest thread.
  * This function is called on every context switch. */
+/* 다음 스레드의 유저 코드를 실행하기 위해 CPU 설정을 처리하는 함수 (모든 문맥 전환시 호출)*/
 void
 process_activate (struct thread *next) {
 	/* Activate thread's page tables. */
-	pml4_activate (next->pml4);
+	pml4_activate (next->pml4);		// 다음 스레드의 페이지 테이블 활성화 (즉, 다음 스레드의 주소 공간에 접근할 수 있도록 설정)
 
 	/* Set thread's kernel stack for use in processing interrupts. */
-	tss_update (next);
+	tss_update (next);				// 현재 스레드의 커널 스택 설정 (인터럽트 처리를 위해 사용됨)
 }
 
 /* We load ELF binaries.  The following definitions are taken
@@ -320,6 +417,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
  * Stores the executable's entry point into *RIP
  * and its initial stack pointer into *RSP.
  * Returns true if successful, false otherwise. */
+/* ELF 파일을 현재 스레드로 로드하는 함수 */
 static bool
 load (const char *file_name, struct intr_frame *if_) {
 	struct thread *t = thread_current ();
@@ -330,12 +428,14 @@ load (const char *file_name, struct intr_frame *if_) {
 	int i;
 
 	/* Allocate and activate page directory. */
+	/* 페이지 디렉토리를 할당하고 활성화 */
 	t->pml4 = pml4_create ();
 	if (t->pml4 == NULL)
 		goto done;
 	process_activate (thread_current ());
 
 	/* Open executable file. */
+	/* 실행 파일을 open */
 	file = filesys_open (file_name);
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
@@ -343,6 +443,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	}
 
 	/* Read and verify executable header. */
+	/* ELF 헤더를 읽고 검증, 올바른 ELF 파일인지 확인 */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
 			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)
 			|| ehdr.e_type != 2
@@ -355,6 +456,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	}
 
 	/* Read program headers. */
+	/* 프로그램 헤더를 읽어들임. 각 프로그램 헤더에 따라 세그먼트 로드 */
 	file_ofs = ehdr.e_phoff;
 	for (i = 0; i < ehdr.e_phnum; i++) {
 		struct Phdr phdr;
@@ -379,12 +481,12 @@ load (const char *file_name, struct intr_frame *if_) {
 			case PT_SHLIB:
 				goto done;
 			case PT_LOAD:
-				if (validate_segment (&phdr, file)) {
-					bool writable = (phdr.p_flags & PF_W) != 0;
-					uint64_t file_page = phdr.p_offset & ~PGMASK;
-					uint64_t mem_page = phdr.p_vaddr & ~PGMASK;
-					uint64_t page_offset = phdr.p_vaddr & PGMASK;
-					uint32_t read_bytes, zero_bytes;
+				if (validate_segment (&phdr, file)) {				// 현재 프로그램 헤더의 유효성 검증
+					bool writable = (phdr.p_flags & PF_W) != 0;		// 현재 세그먼트가 쓰기 가능한지 체크
+					uint64_t file_page = phdr.p_offset & ~PGMASK;	// ELF 파일에서 세그먼트의 시작 페이지 오프셋 계산
+					uint64_t mem_page = phdr.p_vaddr & ~PGMASK;		// 메모리에서 세그먼트가 로드될 시작 주소 계산
+					uint64_t page_offset = phdr.p_vaddr & PGMASK;	// 세그먼트 시작 주소에서 페이지 내의 오프셋 계산
+					uint32_t read_bytes, zero_bytes;				// 읽을 바이트 수와 0으로 초기화할 바이트 수 저장
 					if (phdr.p_filesz > 0) {
 						/* Normal segment.
 						 * Read initial part from disk and zero the rest. */
@@ -413,9 +515,6 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
-
-	/* TODO: Your code goes here.
-	 * TODO: Implement argument passing (see project2/argument_passing.html). */
 
 	success = true;
 
