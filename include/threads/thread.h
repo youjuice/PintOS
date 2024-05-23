@@ -106,10 +106,19 @@ struct thread {
     int nice;                           /* nice Value */
     int recent_cpu;                     /* CPU 사용 시간 */
 
-#ifdef USERPROG
+    /* Project 2 */
+    struct file *fd_table[128];         /* File Descriptor Table */
+    struct thread *parent_process;      /* Parent Process */
+    struct list child_list;             /* Sibling Process */
+    struct list_elem child_elem;        /* Child Process */
+    // struct semaphore *wait_sema;        /* Semaphore for "wait" */
+    // struct semaphore *exec_sema;        /* Semaphore for "exec" */
+    int exit_status;                    /* Exit Status */
+
+// #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
-#endif
+// #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;

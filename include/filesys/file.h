@@ -27,4 +27,9 @@ void file_seek (struct file *, off_t);
 off_t file_tell (struct file *);
 off_t file_length (struct file *);
 
+/* Custom Function */
+struct file *get_file(int fd);
+void set_file(int fd, struct file *file);
+int add_file(struct file *file);
+
 #endif /* filesys/file.h */

@@ -322,6 +322,14 @@ thread_exit (void) {
 	process_exit ();
 #endif
 
+	/* fdt의 열린 파일들을 close */
+	for (int i = 0; i < 128; i++) {
+        if (thread_current()->fd_table[i] != NULL) {
+            file_close(thread_current()->fd_table[i]);
+            thread_current()->fd_table[i] = NULL;
+        }
+    }
+
 	/* Just set our status to dying and schedule another process.
 	   We will be destroyed during the call to schedule_tail(). */
 	intr_disable ();
@@ -474,10 +482,20 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->origin_priority = priority;
 	t->magic = THREAD_MAGIC;
 	t->wait_on_lock = NULL;
+	t->parent_process = NULL;
 	list_init(&t->donations);
+	list_init(&t->child_list);
 
 	t->nice = 0;
 	t->recent_cpu = 0;
+	t->exit_status = 0;
+
+	// sema_init(&t->wait_sema, 0);
+	// sema_init(&t->exec_sema, 0);
+
+	for (int i = 0; i < 128; i++) {
+        t->fd_table[i] = NULL;
+    }
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

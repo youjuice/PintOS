@@ -2,6 +2,7 @@
 #include <debug.h>
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+#include "threads/thread.h"
 
 /* An open file. */
 struct file {
@@ -158,4 +159,36 @@ off_t
 file_tell (struct file *file) {
 	ASSERT (file != NULL);
 	return file->pos;
+}
+
+/* Get file by fd */
+struct file *
+get_file(int fd) {
+	struct thread *curr_thread = thread_current();
+	if (fd >= 0 && fd < 128) {
+		return curr_thread->fd_table[fd];
+	}
+	return NULL;
+}
+
+/* Set file by fd */
+void 
+set_file(int fd, struct file *file) {
+    struct thread *curr_thread = thread_current();
+    if (fd >= 0 && fd < 128) {
+        curr_thread->fd_table[fd] = file;
+    }
+}
+
+/* Add file to fd_table */
+int
+add_file(struct file *file) {
+	struct thread *curr_thread = thread_current();
+	for (int fd = 2; fd < 128; fd++) {
+		if (curr_thread->fd_table[fd] == NULL) {
+			curr_thread->fd_table[fd] = file;
+			return fd;
+		}
+	}
+	return -1;
 }

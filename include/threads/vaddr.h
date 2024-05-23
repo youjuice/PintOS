@@ -38,18 +38,22 @@
 #define USER_STACK 0x47480000
 
 /* Returns true if VADDR is a user virtual address. */
+/* vaddr이 사용자 가상 주소인지 여부를 반환 */
 #define is_user_vaddr(vaddr) (!is_kernel_vaddr((vaddr)))
 
 /* Returns true if VADDR is a kernel virtual address. */
+/* vaddr이 커널 가상 주소인지 여부를 반환 */
 #define is_kernel_vaddr(vaddr) ((uint64_t)(vaddr) >= KERN_BASE)
 
 // FIXME: add checking
 /* Returns kernel virtual address at which physical address PADDR
  *  is mapped. */
+/* 물리 주소가 매핑된 커널 가상 주소 반환 */
 #define ptov(paddr) ((void *) (((uint64_t) paddr) + KERN_BASE))
 
 /* Returns physical address at which kernel virtual address VADDR
  * is mapped. */
+/* 커널 가상 주소가 매핑된 물리 주소 반환 */
 #define vtop(vaddr) \
 ({ \
 	ASSERT(is_kernel_vaddr(vaddr)); \

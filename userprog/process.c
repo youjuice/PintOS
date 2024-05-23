@@ -225,9 +225,9 @@ process_exec (void *f_name) {
 	argument_stack(&token_list, token_index, &_if);
 
 	/* Debug Code */
-	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
+	// hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 	
-	palloc_free_page (file_name);				// 페이지 해제
+	palloc_free_page (file_name);			// 페이지 해제
 
 	/* Start switched process. */
 	do_iret (&_if);							// _if에 저장된 새로운 실행 컨텍스트로 전환

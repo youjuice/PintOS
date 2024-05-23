@@ -8,19 +8,21 @@
 #include "threads/mmu.h"
 #include "intrinsic.h"
 
+// 주어진 가상 주소에 대한 페이지 테이블 엔트리를 찾거나 생성하여 반환
 static uint64_t *
 pgdir_walk (uint64_t *pdp, const uint64_t va, int create) {
-	int idx = PDX (va);
-	if (pdp) {
-		uint64_t *pte = (uint64_t *) pdp[idx];
-		if (!((uint64_t) pte & PTE_P)) {
-			if (create) {
-				uint64_t *new_page = palloc_get_page (PAL_ZERO);
+	int idx = PDX (va);		// 가상 주소에서 PML4 인덱스 추출
+	if (pdp) {			
+		uint64_t *pte = (uint64_t *) pdp[idx];		// pdp 테이블에서 idx 위치의 엔트리를 가져옴
+		if (!((uint64_t) pte & PTE_P)) {			// 해당 엔트리 유효한지 확인
+			if (create) {							// 없으면 만들어라 (create 플래크 체크)
+				uint64_t *new_page = palloc_get_page (PAL_ZERO);		// 새 페이지 할당
 				if (new_page)
-					pdp[idx] = vtop (new_page) | PTE_U | PTE_W | PTE_P;
+					pdp[idx] = vtop (new_page) | PTE_U | PTE_W | PTE_P;	// 사용자 접근, 쓰기 가능, 존재 플래그 체크
 				else
 					return NULL;
-			} else
+			} 
+			else
 				return NULL;
 		}
 		return (uint64_t *) ptov (PTE_ADDR (pdp[idx]) + 8 * PTX (va));
