@@ -93,13 +93,13 @@ initd (void *f_name) {
 tid_t 
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
     struct thread *parent_thread = thread_current();
-    memcpy(&parent_thread->saved_if, if_, sizeof(struct intr_frame)); // if_ 미리 저장해놓아야 함
+    // memcpy(&parent_thread->saved_if, if_, sizeof(struct intr_frame)); // if_ 미리 저장해놓아야 함
     
     tid_t child_pid = thread_create(name, PRI_DEFAULT, __do_fork, parent_thread);
-    if (child_pid == TID_ERROR) return TID_ERROR;
+    if (child_pid == TID_ERROR) 	return TID_ERROR;
     
     struct thread *child_thread = get_child_thread(child_pid);
-    if (child_thread == NULL) 	return TID_ERROR;
+    if (child_thread == NULL) 		return TID_ERROR;	
     
     sema_down(&child_thread->fork_sema); // 부모 스레드 대기 시킴
     return child_pid;
@@ -163,7 +163,7 @@ __do_fork (void *aux) {
 	struct thread *parent = (struct thread *) aux;	// 보조 데이터로 전달된 포인터를 parent에 캐스팅
 	struct thread *current = thread_current ();		
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	struct intr_frame *parent_if = &parent->saved_if;
+	struct intr_frame *parent_if = parent->saved_if;
 	bool succ = true;
 
 	/* 1. Read the cpu context to local stack. */
@@ -246,8 +246,9 @@ process_exec (void *f_name) {
 	success = load (file_name, &_if);		// 주어진 파일을 로드하여 새로운 프로세스 시작
 
 	/* If load failed, quit. */
-	if (!success)
-		return -1;			
+	if (!success) {
+		return -1;		
+	}
 
 	/* Set up Stack & Push */ 
 	argument_stack(&token_list, token_index, &_if);
@@ -323,7 +324,7 @@ process_wait (tid_t child_tid UNUSED) {
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
 	struct thread *child_thread = get_child_thread(child_tid);
-	if (child_thread == NULL)	return -1;
+	if (child_thread == NULL) 	return -1;
 
 	sema_down(&child_thread->wait_sema);
 	list_remove(&child_thread->child_elem);

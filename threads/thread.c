@@ -327,14 +327,6 @@ thread_exit (void) {
 	process_exit ();
 #endif
 
-	/* fdt의 열린 파일들을 close */
-	for (int i = 0; i < 128; i++) {
-        if (thread_current()->fd_table[i] != NULL) {
-            file_close(thread_current()->fd_table[i]);
-            thread_current()->fd_table[i] = NULL;
-        }
-    }
-
 	/* Just set our status to dying and schedule another process.
 	   We will be destroyed during the call to schedule_tail(). */
 	intr_disable ();

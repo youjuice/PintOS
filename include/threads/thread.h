@@ -115,7 +115,7 @@ struct thread {
     struct semaphore wait_sema;         /* Semaphore for "wait" */
     struct semaphore free_sema;         /* Semaphore for "free" */
     struct semaphore fork_sema;         /* Semaphore for "fork" */
-    struct intr_frame saved_if;
+    struct intr_frame *saved_if;
     int exit_status;                    /* Exit Status */
 
 // #ifdef USERPROG

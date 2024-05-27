@@ -7,6 +7,7 @@
 #include "threads/init.h"
 #include "threads/synch.h"
 #include "threads/palloc.h"
+#include "userprog/process.h"
 #include "lib/kernel/stdio.h"
 #include "lib/string.h"
 #include "userprog/gdt.h"
@@ -66,7 +67,7 @@ syscall_init (void) {
 	write_msr(MSR_SYSCALL_MASK,
 			FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
 	
-	// lock_init(&filesys_lock);
+	lock_init(&filesys_lock);
 }
 
 /* Verify User Address */
@@ -96,7 +97,8 @@ syscall_handler (struct intr_frame *f) {
 			exit(arg1);
 			break;
 		case SYS_FORK :
-			f->R.rax = fork(arg1, f);
+			thread_current()->saved_if = f;
+			f->R.rax = fork(arg1, NULL);
 			break;
 		case SYS_EXEC :
 			f->R.rax = exec(arg1);
@@ -223,7 +225,7 @@ read (int fd, void *buffer, unsigned size) {
 		return -1;
 	}
 
-	off_t result = file_read(file, buffer, size);
+	int result = file_read(file, buffer, size);
 	lock_release(&filesys_lock);
 	return result;
 }
@@ -244,11 +246,10 @@ write (int fd, const void *buffer, unsigned size) {
 		return -1;
 	}
 
-	off_t result = file_write(file, buffer, size);
+	int result = file_write(file, buffer, size);
 	lock_release(&filesys_lock);
     return result;
 }
-
 
 void 
 seek (int fd, unsigned position) {
