@@ -93,7 +93,6 @@ initd (void *f_name) {
 tid_t 
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
     struct thread *parent_thread = thread_current();
-    // memcpy(&parent_thread->saved_if, if_, sizeof(struct intr_frame)); // if_ 미리 저장해놓아야 함
     
     tid_t child_pid = thread_create(name, PRI_DEFAULT, __do_fork, parent_thread);
     if (child_pid == TID_ERROR) 	return TID_ERROR;
