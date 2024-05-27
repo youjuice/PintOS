@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
 #include "threads/interrupt.h"
 #ifdef VM
 #include "vm/vm.h"
@@ -111,8 +112,10 @@ struct thread {
     struct thread *parent_process;      /* Parent Process */
     struct list child_list;             /* Sibling Process */
     struct list_elem child_elem;        /* Child Process */
-    // struct semaphore *wait_sema;        /* Semaphore for "wait" */
-    // struct semaphore *exec_sema;        /* Semaphore for "exec" */
+    struct semaphore wait_sema;         /* Semaphore for "wait" */
+    struct semaphore free_sema;         /* Semaphore for "free" */
+    struct semaphore fork_sema;         /* Semaphore for "fork" */
+    struct intr_frame saved_if;
     int exit_status;                    /* Exit Status */
 
 // #ifdef USERPROG
@@ -182,6 +185,10 @@ void calculate_load_avg(struct thread *t);
 void increase_recent_cpu(void);
 void recalculate_priority(void);
 void recalculate_recent_cpu(void);
+
+/* Custom Function 2 */
+struct thread *get_child_thread(tid_t tid);
+void remove_child_thread(struct thread *child_thread);
 
 #endif /* threads/thread.h */
 

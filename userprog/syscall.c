@@ -66,7 +66,7 @@ syscall_init (void) {
 	write_msr(MSR_SYSCALL_MASK,
 			FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
 	
-	lock_init(&filesys_lock);
+	// lock_init(&filesys_lock);
 }
 
 /* Verify User Address */
@@ -130,9 +130,6 @@ syscall_handler (struct intr_frame *f) {
 			break;
 		case SYS_CLOSE :
 			close(arg1);
-			break;
-		default :
-			exit(-1);
 			break;
 	}
 }

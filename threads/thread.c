@@ -81,6 +81,10 @@ void increase_recent_cpu(void);
 void recalculate_priority(void);
 void recalculate_recent_cpu(void);
 
+/* Custom Function 2 */
+struct thread *get_child_thread(tid_t tid);
+void remove_child_thread(struct thread *child_thread);
+
 /* Custom Variable*/
 struct list sleep_list;
 struct list all_list;
@@ -239,6 +243,7 @@ thread_create (const char *name, int priority,
 	t->tf.eflags = FLAG_IF;
 
 	list_push_back(&all_list, &t->a_elem);
+	list_push_back(&thread_current()->child_list, &t->child_elem);
 
 	/* Add to run queue. */
 	thread_unblock (t);
@@ -490,12 +495,15 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->recent_cpu = 0;
 	t->exit_status = 0;
 
-	// sema_init(&t->wait_sema, 0);
-	// sema_init(&t->exec_sema, 0);
-
-	for (int i = 0; i < 128; i++) {
+	t->fd_table[0] = 0;
+	t->fd_table[1] = 1;
+	for (int i = 2; i < 128; i++) {
         t->fd_table[i] = NULL;
     }
+
+	sema_init(&t->fork_sema, 0);
+	sema_init(&t->free_sema, 0);
+	sema_init(&t->wait_sema, 0);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -833,4 +841,29 @@ recalculate_recent_cpu(void)
 		struct thread *t = list_entry(e, struct thread, a_elem);
 		calculate_recent_cpu(t);
 	}
+}
+
+
+/* =========== Project 2 - Custom Function =========== */
+struct thread *
+get_child_thread(tid_t tid) {
+	struct thread *curr_thread = thread_current();
+	for (struct list_elem *e = list_begin(&curr_thread->child_list); e != list_end(&curr_thread->child_list); e = list_next(e)) {
+		struct thread *child_thread = list_entry(e, struct thread, child_elem);
+		if (child_thread->tid == tid) {
+			return child_thread;
+		}
+	}
+	return NULL;
+}
+
+void
+remove_child_thread(struct thread *child_thread) {
+	if (child_thread == NULL)	return;
+
+	struct thread *parent_thread = child_thread->parent_process;
+	if (parent_thread != NULL)
+		list_remove(&child_thread->child_elem);
+	
+	palloc_free_page(child_thread);
 }
