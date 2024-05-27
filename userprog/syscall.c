@@ -6,15 +6,17 @@
 #include "threads/loader.h"
 #include "threads/init.h"
 #include "threads/synch.h"
+#include "threads/palloc.h"
 #include "lib/kernel/stdio.h"
+#include "lib/string.h"
 #include "userprog/gdt.h"
 #include "threads/flags.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 #include "intrinsic.h"
 
-#define STDIN	0
-#define STDOUT	1
+#define STDIN_FILENO	0
+#define STDOUT_FILENO	1
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -23,7 +25,7 @@ void check_address (void *addr);
 /* System Call Function */
 void halt (void);
 void exit (int status);
-tid_t fork (const char *thread_name);
+tid_t fork (const char *thread_name, struct intr_frame *f);
 int exec (const char *cmd_line);
 int wait (tid_t tid);
 bool create (const char *file, unsigned initial_size);
@@ -37,7 +39,7 @@ unsigned tell (int fd);
 void close (int fd);
 
 /* File System Lock */
-struct lock *filesys_lock;
+struct lock filesys_lock;
 
 /* System call.
  *
@@ -64,7 +66,7 @@ syscall_init (void) {
 	write_msr(MSR_SYSCALL_MASK,
 			FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
 	
-	// lock_init(&filesys_lock);
+	lock_init(&filesys_lock);
 }
 
 /* Verify User Address */
@@ -94,13 +96,13 @@ syscall_handler (struct intr_frame *f) {
 			exit(arg1);
 			break;
 		case SYS_FORK :
-			fork(arg1);
+			f->R.rax = fork(arg1, f);
 			break;
 		case SYS_EXEC :
-			exec(arg1);
+			f->R.rax = exec(arg1);
 			break;
 		case SYS_WAIT :
-			wait(arg1);
+			f->R.rax = wait(arg1);
 			break;
 		case SYS_CREATE :
 			f->R.rax = create(arg1, arg2);
@@ -133,7 +135,6 @@ syscall_handler (struct intr_frame *f) {
 			exit(-1);
 			break;
 	}
-	// thread_exit ();
 }
 
 /* ========= System Call Function ========= */
@@ -152,18 +153,26 @@ exit (int status) {
 }
 
 tid_t
-fork (const char *thread_name) {
-
+fork (const char *thread_name, struct intr_frame *f) {
+	return process_fork(thread_name, f);
 }
 
 int
 exec (const char *cmd_line) {
+	check_address(cmd_line);
 
+	char *copy = palloc_get_page(PAL_ZERO);
+	if (copy == NULL)	exit(-1);
+
+	strlcpy(copy, cmd_line, PGSIZE);
+	if (process_exec(copy) == -1)	exit(-1);
+	
+	return 0;
 }
 
 int 
 wait (tid_t tid) {
-	// struct thread *child_thread = get_thread(tid);
+	return process_wait(tid);
 }
 
 /* =========== File System Related =========== */
@@ -202,25 +211,45 @@ filesize (int fd) {
 int 
 read (int fd, void *buffer, unsigned size) {
 	check_address(buffer);
-	struct file *file = get_file(fd);
+	if (fd == STDIN_FILENO) {
+		char *buf = buffer;
+		for (int i = 0; i < size; i++) {
+			buf[i] = input_getc();
+		}
+		return size;
+	}
 
-	if (file == NULL)	return -1;
-	return file_read(file, buffer, size);
+	lock_acquire(&filesys_lock);
+	struct file *file = get_file(fd);
+	if (file == NULL) {
+		lock_release(&filesys_lock);
+		return -1;
+	}
+
+	off_t result = file_read(file, buffer, size);
+	lock_release(&filesys_lock);
+	return result;
 }
 
 int
 write (int fd, const void *buffer, unsigned size) {
     check_address(buffer);
 
-	if (fd == STDOUT) {
+	if (fd == STDOUT_FILENO) {
         putbuf(buffer, size);
         return size;
     } 
 
+    lock_acquire(&filesys_lock);
     struct file *file = get_file(fd);
-    if (file == NULL) 	return -1;
+    if (file == NULL) {
+		lock_release(&filesys_lock);
+		return -1;
+	}
 
-    return file_write(file, buffer, size);
+	off_t result = file_write(file, buffer, size);
+	lock_release(&filesys_lock);
+    return result;
 }
 
 
