@@ -56,7 +56,6 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 bool thread_mlfqs;
 
 static void kernel_thread (thread_func *, void *aux);
-
 static void idle (void *aux UNUSED);
 static struct thread *next_thread_to_run (void);
 static void init_thread (struct thread *, const char *name, int priority);
@@ -489,7 +488,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 
 	t->fd_table[0] = 0;
 	t->fd_table[1] = 1;
-	for (int i = 2; i < 128; i++) {
+	for (int i = 2; i < FDT_SIZE; i++) {
         t->fd_table[i] = NULL;
     }
 

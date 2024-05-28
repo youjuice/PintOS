@@ -196,7 +196,7 @@ __do_fork (void *aux) {
 	 * - 부모는 이 함수가 부모의 리소스를 성공적으로 복제할 때까지 fork()에서 반환해서는 안됨. */
 	current->fd_table[0] = parent->fd_table[0];
 	current->fd_table[1] = parent->fd_table[1];
-	for (int i = 2; i < 128; i++) {
+	for (int i = 2; i < FDT_SIZE; i++) {
 		if (parent->fd_table[i] != NULL)
 			current->fd_table[i] = file_duplicate(parent->fd_table[i]);
 	}
@@ -343,17 +343,20 @@ process_exit (void) {
 	 * TODO: We recommend you to implement process resource cleanup here. */
 
 	// 1. 파일 디스크립터 정리
-	for (int i = 2; i < 128; i++) {
+	for (int i = 2; i < FDT_SIZE; i++) {
         if (curr->fd_table[i] != NULL) {
             file_close(curr->fd_table[i]);
             curr->fd_table[i] = NULL; 
         }
     }
 
-	// 2. 남은 자원 정리
+	// 2. 현재 실행중인 파일 닫기
+	file_close(curr->running_file);
+
+	// 3. 남은 자원 정리
 	process_cleanup ();
 
-	// 3. 동기화 (wait_sema & free_sema)
+	// 4. 동기화 (wait_sema & free_sema)
 	sema_up(&curr->wait_sema);
 	sema_down(&curr->free_sema);
 }
@@ -485,7 +488,7 @@ load (const char *file_name, struct intr_frame *if_) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
 	}
-
+	
 	/* Read and verify executable header. */
 	/* ELF 헤더를 읽고 검증, 올바른 ELF 파일인지 확인 */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -553,6 +556,10 @@ load (const char *file_name, struct intr_frame *if_) {
 		}
 	}
 
+	/* Denying Writes to Executables */
+	t->running_file = file;
+	file_deny_write(file);
+
 	/* Set up stack. */
 	if (!setup_stack (if_))
 		goto done;
@@ -564,7 +571,7 @@ load (const char *file_name, struct intr_frame *if_) {
 
 done:
 	/* We arrive here whether the load is successful or not. */
-	file_close (file);
+	// file_close (file);
 	return success;
 }
 

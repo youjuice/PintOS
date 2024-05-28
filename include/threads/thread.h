@@ -29,6 +29,8 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+#define FDT_SIZE 64
+
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
@@ -96,26 +98,25 @@ struct thread {
     int64_t local_ticks;                /* Local Ticks */
 
     /* Shared between thread.c and synch.c. */
-    /* Project 1.2 */
+    /* Project 1 */
     struct list_elem elem;              /* List element. */
     struct lock *wait_on_lock;          /* 기다리고 있는 Lock */
     struct list donations;              /* 해당 스레드에게 기부된 우선순위 리스트 */
     struct list_elem d_elem;            /* Donation List element */
     struct list_elem a_elem;            /* All List element */
-
-    /* Project 1.3 */
     int nice;                           /* nice Value */
     int recent_cpu;                     /* CPU 사용 시간 */
 
     /* Project 2 */
-    struct file *fd_table[128];         /* File Descriptor Table */
+    struct file *fd_table[FDT_SIZE];    /* File Descriptor Table */
     struct thread *parent_process;      /* Parent Process */
     struct list child_list;             /* Sibling Process */
     struct list_elem child_elem;        /* Child Process */
-    struct semaphore wait_sema;         /* Semaphore for "wait" */
-    struct semaphore free_sema;         /* Semaphore for "free" */
-    struct semaphore fork_sema;         /* Semaphore for "fork" */
-    struct intr_frame *saved_if;
+    struct semaphore wait_sema;         /* Semaphore for "Wait" */
+    struct semaphore free_sema;         /* Semaphore for "Free" */
+    struct semaphore fork_sema;         /* Semaphore for "Fork" */
+    struct intr_frame *saved_if;        /* Saved Interrupt Frame */
+    struct file *running_file;          /* Running File */
     int exit_status;                    /* Exit Status */
 
 // #ifdef USERPROG
