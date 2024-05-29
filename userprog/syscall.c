@@ -1,6 +1,7 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+#include "lib/string.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/loader.h"
@@ -164,9 +165,7 @@ exec (const char *cmd_line) {
 	if (copy == NULL)	exit(-1);
 
 	strlcpy(copy, cmd_line, PGSIZE);
-	if (process_exec(copy) == -1)	exit(-1);
-	
-	return 0;
+	return process_exec(copy);
 }
 
 int 
@@ -191,7 +190,10 @@ int
 open (const char *file) {
 	check_address(file);
 	struct file *open_file = filesys_open(file);
-	if (open_file == NULL) 	return -1;
+	if (open_file == NULL) 		return -1;
+
+	if(strcmp(thread_name(), file) == 0) 
+		file_deny_write(open_file);
 
 	int fd = add_file(open_file);
 	if (fd == -1)	file_close(open_file);
@@ -210,6 +212,7 @@ filesize (int fd) {
 int 
 read (int fd, void *buffer, unsigned size) {
 	check_address(buffer);
+
 	if (fd == STDIN_FILENO) {
 		char *buf = buffer;
 		for (int i = 0; i < size; i++) {
@@ -217,7 +220,7 @@ read (int fd, void *buffer, unsigned size) {
 		}
 		return size;
 	}
-
+	
 	lock_acquire(&filesys_lock);
 	struct file *file = get_file(fd);
 	if (file == NULL) {

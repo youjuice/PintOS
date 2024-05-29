@@ -1,6 +1,8 @@
 #ifndef THREADS_THREAD_H
 #define THREADS_THREAD_H
 
+#define USERPROG
+
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
@@ -119,10 +121,10 @@ struct thread {
     struct file *running_file;          /* Running File */
     int exit_status;                    /* Exit Status */
 
-// #ifdef USERPROG
+#ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
-// #endif
+#endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;

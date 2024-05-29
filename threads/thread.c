@@ -243,6 +243,7 @@ thread_create (const char *name, int priority,
 
 	list_push_back(&all_list, &t->a_elem);
 	list_push_back(&thread_current()->child_list, &t->child_elem);
+	t->parent_process = thread_current();
 
 	/* Add to run queue. */
 	thread_unblock (t);
@@ -323,6 +324,7 @@ thread_exit (void) {
 	ASSERT (!intr_context ());
 
 #ifdef USERPROG
+
 	process_exit ();
 #endif
 

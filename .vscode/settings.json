@@ -9,6 +9,9 @@
         "tuple": "c",
         "type_traits": "c",
         "utility": "c",
-        "fixed-point.h": "c"
+        "fixed-point.h": "c",
+        "thread.h": "c",
+        "*.tcc": "c",
+        "fstream": "c"
     }
 }

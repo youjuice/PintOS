@@ -7,6 +7,7 @@
 #include <string.h>
 #include "userprog/gdt.h"
 #include "userprog/tss.h"
+#include "userprog/syscall.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -168,7 +169,6 @@ __do_fork (void *aux) {
 	/* 1. Read the cpu context to local stack. */
 	/* 1. 부모의 인터럽트 프레임을 현재 스레드의 인터럽트 프레임에 복사 */
 	memcpy (&if_, parent_if, sizeof (struct intr_frame));
-	if_.R.rax = 0;
 
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create();	// 새로운 페이지 테이블을 생성하여 현재 스레드의 페이지 맵 레벨 4에 할당
@@ -194,6 +194,7 @@ __do_fork (void *aux) {
 	/* - 파일을 복제하는 코드를 여기에 추가.
 	 * - 파일 객체를 복제하기 위해서는 file_duplicate 함수 사용 
 	 * - 부모는 이 함수가 부모의 리소스를 성공적으로 복제할 때까지 fork()에서 반환해서는 안됨. */
+
 	current->fd_table[0] = parent->fd_table[0];
 	current->fd_table[1] = parent->fd_table[1];
 	for (int i = 2; i < FDT_SIZE; i++) {
@@ -201,16 +202,18 @@ __do_fork (void *aux) {
 			current->fd_table[i] = file_duplicate(parent->fd_table[i]);
 	}
 	
+	process_init();					// 프로세스 초기화
+	if_.R.rax = 0;					// return 0
 	sema_up(&current->fork_sema);	// 초기화 완료 -> 부모 스레드 진행 !!
-	process_init();	// 프로세스 초기화
-
+	
 	/* Finally, switch to the newly created process. */
 	if (succ)				// 성공하면,
 		do_iret (&if_);		// 새로운 프로세스로 전환
+
 error:						// 오류 발생시,
 	current->exit_status = TID_ERROR;
 	sema_up(&current->fork_sema);
-	thread_exit ();			// 스레드 종료
+	exit (-1);				// 스레드 종료
 }
 
 /* Switch the current execution context to the f_name.
@@ -240,15 +243,17 @@ process_exec (void *f_name) {
 
 	for (token = strtok_r(file_name, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
 		token_list[token_index++] = token;
-
+	
 	/* And then load the binary */
+	lock_acquire(&filesys_lock);
 	success = load (file_name, &_if);		// 주어진 파일을 로드하여 새로운 프로세스 시작
+	lock_release(&filesys_lock);
 
 	/* If load failed, quit. */
 	if (!success) {
-		return -1;		
+		return -1;
 	}
-
+	
 	/* Set up Stack & Push */ 
 	argument_stack(&token_list, token_index, &_if);
 
@@ -256,7 +261,7 @@ process_exec (void *f_name) {
 	// hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 	
 	palloc_free_page (file_name);			// 페이지 해제
-
+	
 	/* Start switched process. */
 	do_iret (&_if);							// _if에 저장된 새로운 실행 컨텍스트로 전환
 	NOT_REACHED ();
@@ -341,7 +346,7 @@ process_exit (void) {
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
-
+	
 	// 1. 파일 디스크립터 정리
 	for (int i = 2; i < FDT_SIZE; i++) {
         if (curr->fd_table[i] != NULL) {
@@ -349,13 +354,13 @@ process_exit (void) {
             curr->fd_table[i] = NULL; 
         }
     }
-
+	
 	// 2. 현재 실행중인 파일 닫기
 	file_close(curr->running_file);
-
+	
 	// 3. 남은 자원 정리
 	process_cleanup ();
-
+	
 	// 4. 동기화 (wait_sema & free_sema)
 	sema_up(&curr->wait_sema);
 	sema_down(&curr->free_sema);
@@ -473,14 +478,14 @@ load (const char *file_name, struct intr_frame *if_) {
 	off_t file_ofs;
 	bool success = false;
 	int i;
-
+	
 	/* Allocate and activate page directory. */
 	/* 페이지 디렉토리를 할당하고 활성화 */
 	t->pml4 = pml4_create ();
 	if (t->pml4 == NULL)
 		goto done;
 	process_activate (thread_current ());
-
+	
 	/* Open executable file. */
 	/* 실행 파일을 open */
 	file = filesys_open (file_name);
@@ -501,7 +506,7 @@ load (const char *file_name, struct intr_frame *if_) {
 		printf ("load: %s: error loading executable\n", file_name);
 		goto done;
 	}
-
+	
 	/* Read program headers. */
 	/* 프로그램 헤더를 읽어들임. 각 프로그램 헤더에 따라 세그먼트 로드 */
 	file_ofs = ehdr.e_phoff;
@@ -556,25 +561,19 @@ load (const char *file_name, struct intr_frame *if_) {
 		}
 	}
 
-	/* Denying Writes to Executables */
-	t->running_file = file;
-	file_deny_write(file);
-
 	/* Set up stack. */
 	if (!setup_stack (if_))
 		goto done;
-
+	
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
-
 	success = true;
-
+	
 done:
 	/* We arrive here whether the load is successful or not. */
 	// file_close (file);
 	return success;
 }
-
 
 /* Checks whether PHDR describes a valid, loadable segment in
  * FILE and returns true if so, false otherwise. */

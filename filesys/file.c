@@ -165,7 +165,7 @@ file_tell (struct file *file) {
 struct file *
 get_file(int fd) {
 	struct thread *curr_thread = thread_current();
-	if (fd >= 0 && fd < 128) {
+	if (fd >= 0 && fd < FDT_SIZE) {
 		return curr_thread->fd_table[fd];
 	}
 	return NULL;
@@ -175,7 +175,7 @@ get_file(int fd) {
 void 
 set_file(int fd, struct file *file) {
     struct thread *curr_thread = thread_current();
-    if (fd >= 0 && fd < 128) {
+    if (fd >= 0 && fd < FDT_SIZE) {
         curr_thread->fd_table[fd] = file;
     }
 }
@@ -184,7 +184,7 @@ set_file(int fd, struct file *file) {
 int
 add_file(struct file *file) {
 	struct thread *curr_thread = thread_current();
-	for (int fd = 2; fd < 128; fd++) {
+	for (int fd = 2; fd < FDT_SIZE; fd++) {
 		if (curr_thread->fd_table[fd] == NULL) {
 			curr_thread->fd_table[fd] = file;
 			return fd;
