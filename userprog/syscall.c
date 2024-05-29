@@ -27,7 +27,7 @@ void check_address (void *addr);
 /* System Call Function */
 void halt (void);
 void exit (int status);
-tid_t fork (const char *thread_name, struct intr_frame *f);
+tid_t fork (const char *thread_name);
 int exec (const char *cmd_line);
 int wait (tid_t tid);
 bool create (const char *file, unsigned initial_size);
@@ -99,7 +99,7 @@ syscall_handler (struct intr_frame *f) {
 			break;
 		case SYS_FORK :
 			thread_current()->saved_if = f;
-			f->R.rax = fork(arg1, NULL);
+			f->R.rax = fork(arg1);
 			break;
 		case SYS_EXEC :
 			f->R.rax = exec(arg1);
@@ -153,8 +153,8 @@ exit (int status) {
 }
 
 tid_t
-fork (const char *thread_name, struct intr_frame *f) {
-	return process_fork(thread_name, f);
+fork (const char *thread_name) {
+	return process_fork(thread_name);
 }
 
 int

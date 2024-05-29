@@ -92,7 +92,7 @@ initd (void *f_name) {
  * TID_ERROR if the thread cannot be created. */
 /* 현재 프로세스를 name으로 복제하고 새 프로세스의 스레드 ID를 반환하는 함수 */
 tid_t 
-process_fork (const char *name, struct intr_frame *if_ UNUSED) {
+process_fork (const char *name) {
     struct thread *parent_thread = thread_current();
     
     tid_t child_pid = thread_create(name, PRI_DEFAULT, __do_fork, parent_thread);
