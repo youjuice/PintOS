@@ -186,19 +186,13 @@ __do_fork (void *aux) {
 		goto error;
 #endif
 
-	/* TODO: Your code goes here.
-	 * TODO: Hint) To duplicate the file object, use `file_duplicate`
-	 * TODO:       in include/filesys/file.h. Note that parent should not return
-	 * TODO:       from the fork() until this function successfully duplicates
-	 * TODO:       the resources of parent. */
-	/* - 파일을 복제하는 코드를 여기에 추가.
+	/* - TODO: 파일을 복제하는 코드를 여기에 추가.
 	 * - 파일 객체를 복제하기 위해서는 file_duplicate 함수 사용 
 	 * - 부모는 이 함수가 부모의 리소스를 성공적으로 복제할 때까지 fork()에서 반환해서는 안됨. */
-
-	current->fd_table[0] = parent->fd_table[0];
-	current->fd_table[1] = parent->fd_table[1];
-	for (int i = 2; i < FDT_SIZE; i++) {
-		if (parent->fd_table[i] != NULL)
+	for (int i = 0; i < FDT_SIZE; i++) {
+		if (i < 2)	
+			current->fd_table[i] = parent->fd_table[i];
+		else if (parent->fd_table[i] != NULL)
 			current->fd_table[i] = file_duplicate(parent->fd_table[i]);
 	}
 	
@@ -213,7 +207,7 @@ __do_fork (void *aux) {
 error:						// 오류 발생시,
 	current->exit_status = TID_ERROR;
 	sema_up(&current->fork_sema);
-	exit (-1);				// 스레드 종료
+	thread_exit();				// 스레드 종료
 }
 
 /* Switch the current execution context to the f_name.
@@ -333,7 +327,7 @@ process_wait (tid_t child_tid UNUSED) {
 	sema_down(&child_thread->wait_sema);
 	list_remove(&child_thread->child_elem);
 	sema_up(&child_thread->free_sema);
-
+	
 	return child_thread->exit_status;
 }
 
@@ -354,7 +348,7 @@ process_exit (void) {
             curr->fd_table[i] = NULL; 
         }
     }
-	
+
 	// 2. 현재 실행중인 파일 닫기
 	file_close(curr->running_file);
 	
@@ -560,6 +554,8 @@ load (const char *file_name, struct intr_frame *if_) {
 				break;
 		}
 	}
+
+	t->running_file = file;		// 현재 스레드의 실행 파일 설정
 
 	/* Set up stack. */
 	if (!setup_stack (if_))

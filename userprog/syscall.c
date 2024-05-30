@@ -258,7 +258,7 @@ void
 seek (int fd, unsigned position) {
 	struct file *file = get_file(fd);
 
-	if (file == NULL)	return -1;
+	if (file == NULL)	return NULL;
 	file_seek(file, position);
 }
 
