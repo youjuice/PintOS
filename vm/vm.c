@@ -1,6 +1,7 @@
 /* vm.c: Generic interface for virtual memory objects. */
 
 #include "threads/malloc.h"
+#include "threads/vaddr.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
 
@@ -174,6 +175,11 @@ vm_do_claim_page (struct page *page) {
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
+	hash_init(&thread_current()->spt.vmt, vm_hash_func, vm_less_func, NULL);
+
+	// 초기화 실패하면 -> 프로그램 종료 해야할까??
+	if (!hash_init(&thread_current()->spt.vmt, vm_hash_func, vm_less_func, NULL)) 	
+		exit(-1);
 }
 
 /* Copy supplemental page table from src to dst */
@@ -187,4 +193,58 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+}
+
+
+/* ========== Custom Function ========== */
+unsigned
+vm_hash_func (const struct hash_elem *e, void *aux) {
+	const struct vm_entry *vm_e = hash_entry(e, struct vm_entry, elem);
+	return hash_int((uintptr_t)vm_e->vaddr);
+}
+
+bool
+vm_less_func (const struct hash_elem *a, const struct hash_elem *b) {
+	const struct vm_entry *vm_a = hash_entry(a, struct vm_entry, elem);
+	const struct vm_entry *vm_b = hash_entry(b, struct vm_entry, elem);
+
+	return vm_a->vaddr < vm_b->vaddr;
+}
+
+bool 
+insert_vme (struct hash *vm, struct vm_entry *vme) {
+	return hash_insert(vm, &vme->elem) == NULL;
+}
+
+bool
+delete_vme (struct hash *vm, struct vm_entry *vme) {
+	return hash_delete(vm, &vme->elem) != NULL;
+}
+
+struct vm_entry *
+find_vme (void *vaddr) {
+	void *page_num = pg_round_down(vaddr);
+
+	// 검색을 위한 vm_entry 선언
+	struct vm_entry temp_vme;
+	temp_vme.vaddr = page_num;
+
+	struct hash_elem *find_elem = hash_find(&thread_current()->spt.vmt, &temp_vme.elem);
+
+	if (find_elem == NULL)
+		return NULL;
+	
+	// 실제 해시 테이블에 저장된 vm_entry 반환 
+	return hash_entry(find_elem, struct vm_entry, elem);	
+}
+
+void
+vm_destroy (struct hash *vm) {
+	hash_destroy(vm, vm_destroy_func);
+}
+
+void
+vm_destroy_func (struct hash_elem *e, void *aux) {
+	struct vm_entry *vme = hash_entry(e, struct vm_entry, elem);
+	free(vme);
 }

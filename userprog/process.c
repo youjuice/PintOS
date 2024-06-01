@@ -85,7 +85,7 @@ initd (void *f_name) {
 
 	if (process_exec (f_name) < 0)			// f_name에 지정된 프로그램 실행
 		PANIC("Fail to launch initd\n");	// 실패하면, 시스템 중지 및 오류 메세지 출력
-	NOT_REACHED ();		
+	NOT_REACHED ();
 }
 
 /* Clones the current process as `name`. Returns the new process's thread id, or
@@ -253,11 +253,12 @@ process_exec (void *f_name) {
 
 	/* Debug Code */
 	// hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
-	
-	palloc_free_page (file_name);			// 페이지 해제
+
+	supplemental_page_table_init(NULL);			// 현재 스레드의 해시 테이블 초기화
+	palloc_free_page (file_name);				// 페이지 해제
 	
 	/* Start switched process. */
-	do_iret (&_if);							// _if에 저장된 새로운 실행 컨텍스트로 전환
+	do_iret (&_if);								// _if에 저장된 새로운 실행 컨텍스트로 전환
 	NOT_REACHED ();
 }
 
@@ -355,7 +356,10 @@ process_exit (void) {
 	// 3. 남은 자원 정리
 	process_cleanup ();
 	
-	// 4. 동기화 (wait_sema & free_sema)
+	// 4. vm_entry들 제거
+	vm_destroy(&thread_current()->spt.vmt);
+
+	// 5. 동기화 (wait_sema & free_sema)
 	sema_up(&curr->wait_sema);
 	sema_down(&curr->free_sema);
 }
@@ -683,7 +687,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack (struct intr_frame *if_) {
 	uint8_t *kpage;
-	bool success = false;
+	bool success = false;		
 
 	kpage = palloc_get_page (PAL_USER | PAL_ZERO);
 	if (kpage != NULL) {
@@ -743,26 +747,48 @@ lazy_load_segment (struct page *page, void *aux) {
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
-	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
-	ASSERT (pg_ofs (upage) == 0);
-	ASSERT (ofs % PGSIZE == 0);
+	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);	// 총 바이트 수가 페이지 크기의 배수인지 확인
+	ASSERT (pg_ofs (upage) == 0);						// 시작 주소가 페이지 경계에 맞춰져 있는지 확인
+	ASSERT (ofs % PGSIZE == 0);							// 오프셋이 페이지 크기의 배수인지 확인
 
+	// read_bytes 또는 zero_bytes가 남아있는 동안 반복
 	while (read_bytes > 0 || zero_bytes > 0) {
-		/* Do calculate how to fill this page.
-		 * We will read PAGE_READ_BYTES bytes from FILE
-		 * and zero the final PAGE_ZERO_BYTES bytes. */
+		/* 이 페이지를 어떻게 채울지 계산
+		 * FILE에서 PAGE_READ_BYTES 바이트를 읽고
+		 * 마지막 PAGE_ZERO_BYTES 바이트를 0으로 채움 */
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
+		/* TODO: lazy_load_segment 함수에 정보를 전달할 aux 설정 */
 		void *aux = NULL;
+
+		// lazy_load_segment 함수를 사용하여 페이지를 초기화하는 vm_alloc_page_with_initializer 호출
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
 					writable, lazy_load_segment, aux))
 			return false;
 
+		/* Create & Initialize vm_entry */
+		struct vm_entry *vme = (struct vm_entry*)malloc(sizeof(struct vm_entry));
+
+		vme->type = VM_FILE;
+		vme->vaddr = upage;
+		vme->offset = ofs;
+		vme->read_bytes = page_read_bytes;
+		vme->zero_bytes = page_zero_bytes;
+		vme->writable = writable;
+		vme->is_loaded = false;
+		vme->file = file;
+
+		if (!insert_vme(&thread_current()->spt.vmt, vme)) {
+			free(vme);
+			return false;
+		}
+
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
+		ofs += page_read_bytes;
 		upage += PGSIZE;
 	}
 	return true;
@@ -774,11 +800,32 @@ setup_stack (struct intr_frame *if_) {
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
 
-	/* TODO: Map the stack on stack_bottom and claim the page immediately.
-	 * TODO: If success, set the rsp accordingly.
-	 * TODO: You should mark the page is stack. */
+	/* TODO: stack_bottom에 스택 매핑 후 즉시 페이지 할당
+	 * TODO: 성공하면, rsp를 적절하게 설정
+	 * TODO: 페이지가 스택임을 표시해야 함 */
 	/* TODO: Your code goes here */
+	if (vm_alloc_page_with_initializer (VM_ANON, stack_bottom, true, NULL, NULL)) {
+		// vm_entry 생성
+		struct vm_entry *vme = (struct vm_entry*)malloc(sizeof(struct vm_entry));
 
+		// vm_entry 필드 초기화
+		vme->type = VM_ANON;
+		vme->vaddr = stack_bottom;
+		vme->offset = 0;
+		vme->read_bytes = 0;
+		vme->zero_bytes = PGSIZE;
+		vme->writable = true;
+		vme->is_loaded = true;
+		vme->file = NULL;
+
+		// vm_entry을 해시 테이블에 삽입 
+		if (insert_vme(&thread_current()->spt.vmt, vme)) {
+			success = true;
+			if_->rsp = USER_STACK;  // 스택 포인터를 USER_STACK으로 설정
+		}
+		else 			
+			free(vme);				// 실패하면 free
+	}
 	return success;
 }
 #endif /* VM */

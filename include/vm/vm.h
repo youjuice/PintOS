@@ -2,6 +2,27 @@
 #define VM_VM_H
 #include <stdbool.h>
 #include "threads/palloc.h"
+#include "lib/kernel/hash.h"
+#include "kernel/hash.h"
+
+/* 가상 메모리의 한 페이지에 대한 정보를 저장하는 구조체 */
+struct vm_entry {
+	uint8_t type;
+	void *vaddr;
+	bool writable;
+
+	bool is_loaded;
+	struct file* file;
+
+	// struct list_elem mmap_elem;		/* Memory Mapped File */
+
+	size_t offset;
+	size_t read_bytes;
+	size_t zero_bytes;
+
+	// size_t swap_slot;				/* Swapping */
+	struct hash_elem elem;
+};
 
 enum vm_type {
 	/* page not initialized */
@@ -85,6 +106,7 @@ struct page_operations {
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
 struct supplemental_page_table {
+	struct hash vmt;
 };
 
 #include "threads/thread.h"
@@ -100,6 +122,15 @@ void spt_remove_page (struct supplemental_page_table *spt, struct page *page);
 void vm_init (void);
 bool vm_try_handle_fault (struct intr_frame *f, void *addr, bool user,
 		bool write, bool not_present);
+
+/* Custom Function */
+unsigned vm_hash_func (const struct hash_elem *e, void *aux);
+bool vm_less_func (const struct hash_elem *a, const struct hash_elem *b);
+bool insert_vme (struct hash *vm, struct vm_entry *vme);
+bool delete_vme (struct hash *vm, struct vm_entry *vme);
+struct vm_entry *find_vme (void *vaddr);
+void vm_destroy (struct hash *vm);
+void vm_destroy_func (struct hash_elem *e, void *aux);
 
 #define vm_alloc_page(type, upage, writable) \
 	vm_alloc_page_with_initializer ((type), (upage), (writable), NULL, NULL)

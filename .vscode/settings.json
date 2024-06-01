@@ -12,6 +12,8 @@
         "fixed-point.h": "c",
         "thread.h": "c",
         "*.tcc": "c",
-        "fstream": "c"
+        "fstream": "c",
+        "vm.h": "c",
+        "intrinsic.h": "c"
     }
 }
