@@ -5,7 +5,7 @@
 
    See hash.h for basic information. */
 
-#include "hash.h"
+#include "kernel/hash.h"
 #include "../debug.h"
 #include "threads/malloc.h"
 

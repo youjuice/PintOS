@@ -16,13 +16,14 @@
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 #include "intrinsic.h"
+#include "vm/vm.h"
 
 #define STDIN_FILENO	0
 #define STDOUT_FILENO	1
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
-void check_address (void *addr);
+struct vm_entry *check_address (void *addr, void *rsp UNUSED);
 
 /* System Call Function */
 void halt (void);
@@ -72,18 +73,21 @@ syscall_init (void) {
 }
 
 /* Verify User Address */
-void
-check_address (void *addr) {
+struct vm_entry *
+check_address (void *addr, void *rsp UNUSED) {
 	struct thread *curr_thread = thread_current();
-	if (addr == NULL || is_kernel_vaddr(addr) || pml4_get_page(curr_thread->pml4, addr) == NULL)
+	if (addr == NULL || is_kernel_vaddr(addr))
 		exit(-1);
+	
+	if (find_vme(addr) == NULL)		exit(-1);
+	return find_vme(addr);
 }
 
 /* The main system call interface */
 void
 syscall_handler (struct intr_frame *f) {
 	// TODO: Your implementation goes here.
-	check_address(f->rsp);
+	check_address(f->rsp, f->rsp);
 
 	int syscall_number = f->R.rax;
 	void *arg1 = f->R.rdi;
@@ -159,7 +163,7 @@ fork (const char *thread_name) {
 
 int
 exec (const char *cmd_line) {
-	check_address(cmd_line);
+	check_valid_string(cmd_line, NULL);
 
 	char *copy = palloc_get_page(PAL_ZERO);
 	if (copy == NULL)	exit(-1);
@@ -176,19 +180,20 @@ wait (tid_t tid) {
 /* =========== File System Related =========== */
 bool 
 create (const char *file, unsigned initial_size) {
-	check_address(file);
+	check_address(file, NULL);
 	return filesys_create(file, initial_size);
 }
 
 bool
 remove (const char *file) {
-	check_address(file);
+	check_address(file, NULL);
 	return filesys_remove(file);
 }
 
 int
 open (const char *file) {
-	check_address(file);
+	check_valid_string(file, NULL);
+
 	struct file *open_file = filesys_open(file);
 	if (open_file == NULL) 		return -1;
 
@@ -211,7 +216,7 @@ filesize (int fd) {
 
 int 
 read (int fd, void *buffer, unsigned size) {
-	check_address(buffer);
+	check_valid_buffer(buffer, size, NULL, true);
 
 	if (fd == STDIN_FILENO) {
 		char *buf = buffer;
@@ -235,7 +240,7 @@ read (int fd, void *buffer, unsigned size) {
 
 int
 write (int fd, const void *buffer, unsigned size) {
-    check_address(buffer);
+    check_valid_buffer(buffer, size, NULL, false);
 
 	if (fd == STDOUT_FILENO) {
         putbuf(buffer, size);

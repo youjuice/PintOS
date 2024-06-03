@@ -4,6 +4,7 @@
 #include "threads/vaddr.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
+#include "userprog/syscall.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -247,4 +248,37 @@ void
 vm_destroy_func (struct hash_elem *e, void *aux) {
 	struct vm_entry *vme = hash_entry(e, struct vm_entry, elem);
 	free(vme);
+}
+
+// For Read syscall
+void
+check_valid_buffer (void *buffer, unsigned size, void *rsp, bool to_write) {
+	uint8_t *buf_addr = (uint8_t *)buffer;
+	uint8_t *end_addr = buf_addr + size - 1;
+
+	// Case 1. buffer의 크기가 한 페이지를 넘지 않는 경우
+	if (pg_round_down(buf_addr) == pg_round_down(end_addr)) {
+		struct vm_entry *vme = check_address(buffer, rsp);
+		if (vme == NULL || vme->writable != to_write) 
+			exit(-1);
+	}
+	// Case 2. buffer의 크기가 한 페이지를 넘는 경우
+	else {
+		for (uint8_t *addr = buf_addr; addr <= end_addr; addr += PGSIZE) {
+			struct vm_entry *vme = check_address(addr, rsp);
+			if (vme == NULL || vme->writable != to_write) 
+				exit(-1);
+		}
+	}
+}
+
+// For Write syscall
+void
+check_valid_string (const void *str, void *rsp) {
+	while (str != '\0') {
+		struct vm_entry *vme = check_address(str, rsp);
+		if (vme == NULL)
+			exit(-1);
+		str++;
+	}
 }

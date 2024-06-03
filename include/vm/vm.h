@@ -131,6 +131,8 @@ bool delete_vme (struct hash *vm, struct vm_entry *vme);
 struct vm_entry *find_vme (void *vaddr);
 void vm_destroy (struct hash *vm);
 void vm_destroy_func (struct hash_elem *e, void *aux);
+void check_valid_buffer (void *buffer, unsigned size, void *rsp, bool to_write);
+void check_valid_string (const void *str, void *rsp);
 
 #define vm_alloc_page(type, upage, writable) \
 	vm_alloc_page_with_initializer ((type), (upage), (writable), NULL, NULL)
