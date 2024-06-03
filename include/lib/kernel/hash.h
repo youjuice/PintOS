@@ -97,4 +97,7 @@ uint64_t hash_bytes (const void *, size_t);
 uint64_t hash_string (const char *);
 uint64_t hash_int (int);
 
+/* Custom Function */
+void vm_destroy_func(struct hash_elem *hash_elem);
+
 #endif /* lib/kernel/hash.h */

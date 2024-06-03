@@ -22,6 +22,7 @@
 #include "intrinsic.h"
 #ifdef VM
 #include "vm/vm.h"
+#include "kernel/hash.h"
 #endif
 
 static void process_cleanup (void);
@@ -356,8 +357,8 @@ process_exit (void) {
 	// 3. 남은 자원 정리
 	process_cleanup ();
 	
-	// 4. vm_entry들 제거
-	vm_destroy(&thread_current()->spt.vmt);
+	// 4. page들 제거
+	hash_destroy(&thread_current()->spt.pages, vm_destroy_func);
 
 	// 5. 동기화 (wait_sema & free_sema)
 	sema_up(&curr->wait_sema);
@@ -728,6 +729,21 @@ lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
+	struct file_page *file_page = &page->file;
+	struct file *file = file_page->file;
+
+	off_t ofs = file_page->offset;
+	uint32_t page_read_bytes = file_page->read_bytes;
+	uint32_t page_zero_bytes = file_page->zero_bytes;
+	uint8_t *kpage = page->frame->kva;
+
+	if (file_read_at(file, kpage, page, ofs) != page_read_bytes) {
+		palloc_free_page(page->frame->kva);
+		return false;
+	}
+
+	memset(kpage + page_read_bytes, 0, page_zero_bytes);
+	return true;
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -759,31 +775,19 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		/* TODO: lazy_load_segment 함수에 정보를 전달할 aux 설정 */
-		void *aux = NULL;
-
 		// lazy_load_segment 함수를 사용하여 페이지를 초기화하는 vm_alloc_page_with_initializer 호출
-		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
-					writable, lazy_load_segment, aux))
+		if (!vm_alloc_page_with_initializer (VM_FILE, upage, writable, lazy_load_segment, NULL))
 			return false;
 
-		/* Create & Initialize vm_entry */
-		struct vm_entry *vme = (struct vm_entry*)malloc(sizeof(struct vm_entry));
+		/* Create & Initialize page */
+		struct page *page = malloc(sizeof(struct page));
 
-		vme->type = VM_FILE;
-		vme->vaddr = upage;
-		vme->offset = ofs;
-		vme->read_bytes = page_read_bytes;
-		vme->zero_bytes = page_zero_bytes;
-		vme->writable = writable;
-		vme->is_loaded = false;
-		vme->file = file;
-
-		if (!insert_vme(&thread_current()->spt.vmt, vme)) {
-			free(vme);
-			return false;
-		}
+		page->file.file = file;
+		page->va = upage;
+		page->file.offset = ofs;
+		page->file.read_bytes = page_read_bytes;
+		page->file.zero_bytes = page_zero_bytes;
+		page->writable = writable;
 
 		/* Advance. */
 		read_bytes -= page_read_bytes;
@@ -805,26 +809,26 @@ setup_stack (struct intr_frame *if_) {
 	 * TODO: 페이지가 스택임을 표시해야 함 */
 	/* TODO: Your code goes here */
 	if (vm_alloc_page_with_initializer (VM_ANON, stack_bottom, true, NULL, NULL)) {
-		// vm_entry 생성
-		struct vm_entry *vme = (struct vm_entry*)malloc(sizeof(struct vm_entry));
+		// page 생성
+		struct page *page = malloc(sizeof(struct page));
 
 		// vm_entry 필드 초기화
-		vme->type = VM_ANON;
-		vme->vaddr = stack_bottom;
-		vme->offset = 0;
-		vme->read_bytes = 0;
-		vme->zero_bytes = PGSIZE;
-		vme->writable = true;
-		vme->is_loaded = true;
-		vme->file = NULL;
+		// page->type = VM_ANON;
+		// page->va = stack_bottom;
+		// page->offset = 0;
+		// page->read_bytes = 0;
+		// page->zero_bytes = PGSIZE;
+		// page->writable = true;
+		// page->is_loaded = true;
+		// page->file = NULL;
 
-		// vm_entry을 해시 테이블에 삽입 
-		if (insert_vme(&thread_current()->spt.vmt, vme)) {
+		// vm_entry을 해시 테이블에 삽입
+		if (spt_insert_page(&thread_current()->spt, page)) {
 			success = true;
 			if_->rsp = USER_STACK;  // 스택 포인터를 USER_STACK으로 설정
 		}
 		else 			
-			free(vme);				// 실패하면 free
+			free(page);				// 실패하면 free
 	}
 	return success;
 }

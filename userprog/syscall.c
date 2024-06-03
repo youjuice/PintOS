@@ -23,7 +23,7 @@
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
-struct vm_entry *check_address (void *addr, void *rsp UNUSED);
+struct page *check_address (void *addr, void *rsp UNUSED);
 
 /* System Call Function */
 void halt (void);
@@ -73,14 +73,13 @@ syscall_init (void) {
 }
 
 /* Verify User Address */
-struct vm_entry *
+struct page *
 check_address (void *addr, void *rsp UNUSED) {
-	struct thread *curr_thread = thread_current();
 	if (addr == NULL || is_kernel_vaddr(addr))
 		exit(-1);
 	
-	if (find_vme(addr) == NULL)		exit(-1);
-	return find_vme(addr);
+	if (spt_find_page(&thread_current()->spt, addr) == NULL)	exit(-1);
+	return spt_find_page(&thread_current()->spt, addr);
 }
 
 /* The main system call interface */
@@ -163,7 +162,7 @@ fork (const char *thread_name) {
 
 int
 exec (const char *cmd_line) {
-	check_valid_string(cmd_line, NULL);
+	check_address(cmd_line, NULL);
 
 	char *copy = palloc_get_page(PAL_ZERO);
 	if (copy == NULL)	exit(-1);
@@ -192,7 +191,7 @@ remove (const char *file) {
 
 int
 open (const char *file) {
-	check_valid_string(file, NULL);
+	check_address(file, NULL);
 
 	struct file *open_file = filesys_open(file);
 	if (open_file == NULL) 		return -1;

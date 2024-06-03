@@ -5,25 +5,6 @@
 #include "lib/kernel/hash.h"
 #include "kernel/hash.h"
 
-/* 가상 메모리의 한 페이지에 대한 정보를 저장하는 구조체 */
-struct vm_entry {
-	uint8_t type;
-	void *vaddr;
-	bool writable;
-
-	bool is_loaded;
-	struct file* file;
-
-	// struct list_elem mmap_elem;		/* Memory Mapped File */
-
-	size_t offset;
-	size_t read_bytes;
-	size_t zero_bytes;
-
-	// size_t swap_slot;				/* Swapping */
-	struct hash_elem elem;
-};
-
 enum vm_type {
 	/* page not initialized */
 	VM_UNINIT = 0,
@@ -67,6 +48,10 @@ struct page {
 	struct frame *frame;   /* Back reference for frame */
 
 	/* Your implementation */
+	bool writable;
+	struct hash_elem h_elem;
+	// struct list_elem m_elem;
+	// size_t swap_slot;
 
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
@@ -80,10 +65,14 @@ struct page {
 	};
 };
 
+/* Frame Table list */
+static struct list frame_table;
+
 /* The representation of "frame" */
 struct frame {
 	void *kva;
 	struct page *page;
+	struct list_elem f_elem;
 };
 
 /* The function table for page operations.
@@ -106,7 +95,7 @@ struct page_operations {
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
 struct supplemental_page_table {
-	struct hash vmt;
+	struct hash pages;
 };
 
 #include "threads/thread.h"
@@ -117,7 +106,7 @@ void supplemental_page_table_kill (struct supplemental_page_table *spt);
 struct page *spt_find_page (struct supplemental_page_table *spt,
 		void *va);
 bool spt_insert_page (struct supplemental_page_table *spt, struct page *page);
-void spt_remove_page (struct supplemental_page_table *spt, struct page *page);
+bool spt_remove_page (struct supplemental_page_table *spt, struct page *page);
 
 void vm_init (void);
 bool vm_try_handle_fault (struct intr_frame *f, void *addr, bool user,
@@ -126,13 +115,7 @@ bool vm_try_handle_fault (struct intr_frame *f, void *addr, bool user,
 /* Custom Function */
 unsigned vm_hash_func (const struct hash_elem *e, void *aux);
 bool vm_less_func (const struct hash_elem *a, const struct hash_elem *b);
-bool insert_vme (struct hash *vm, struct vm_entry *vme);
-bool delete_vme (struct hash *vm, struct vm_entry *vme);
-struct vm_entry *find_vme (void *vaddr);
-void vm_destroy (struct hash *vm);
-void vm_destroy_func (struct hash_elem *e, void *aux);
 void check_valid_buffer (void *buffer, unsigned size, void *rsp, bool to_write);
-void check_valid_string (const void *str, void *rsp);
 
 #define vm_alloc_page(type, upage, writable) \
 	vm_alloc_page_with_initializer ((type), (upage), (writable), NULL, NULL)
