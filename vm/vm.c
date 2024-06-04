@@ -70,7 +70,6 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 				break;
 		}
 		page->writable = writable;
-
 		return spt_insert_page(spt, page);
 	}
 err:
@@ -82,14 +81,6 @@ struct page *
 spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	struct page *search_page = malloc(sizeof(struct page));		// 검색용 page 할당
 	search_page->va = pg_round_down(va);
-	
-	// printf("====================\n");
-	// printf("Search va: %p\n", search_page->va);
-	// struct hash_iterator it;
-	// for (hash_first(&it, &spt->pages); hash_next(&it);) {
-	// 	struct page *p = hash_entry(hash_cur(&it), struct page, h_elem);
-    //     printf("Page va: %p\n", p->va);
-	// }
 
 	struct hash_elem *find_elem = hash_find(&spt->pages, &search_page->h_elem);
 	free(search_page);											// 임시 page 메모리 해제
@@ -205,14 +196,13 @@ vm_claim_page (void *va UNUSED) {
 static bool
 vm_do_claim_page (struct page *page) {
 	struct frame *frame = vm_get_frame ();
-	// printf("Frame: %p\n", frame->kva);
-	// printf("Page: %p\n", page->va);
+
 	/* Set links */
 	frame->page = page;
 	page->frame = frame;
 
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
-	if(pml4_set_page(&thread_current()->pml4, page->va, frame->kva, page->writable))
+	if(pml4_set_page(thread_current()->pml4, page->va, frame->kva, page->writable))
 		return swap_in (page, frame->kva);
 	else
 		return false;
@@ -252,24 +242,24 @@ vm_less_func (struct hash_elem *a, struct hash_elem *b, void *aux) {
 	return page_a->va < page_b->va;
 }
 
-// For syscall.c
-void
-check_valid_buffer (void *buffer, unsigned size, void *rsp, bool to_write) {
-	uint8_t *buf_addr = (uint8_t *)buffer;
-	uint8_t *end_addr = buf_addr + size - 1;
+// // For syscall.c
+// void
+// check_valid_buffer (void *buffer, unsigned size, void *rsp, bool to_write) {
+// 	uint8_t *buf_addr = (uint8_t *)buffer;
+// 	uint8_t *end_addr = buf_addr + size - 1;
 
-	// Case 1. buffer의 크기가 한 페이지를 넘지 않는 경우
-	if (pg_round_down(buf_addr) == pg_round_down(end_addr)) {
-		struct page *page = check_address(buffer, rsp);
-		if (page == NULL || page->writable != to_write) 
-			exit(-1);
-	}
-	// Case 2. buffer의 크기가 한 페이지를 넘는 경우
-	else {
-		for (uint8_t *addr = buf_addr; addr <= end_addr; addr += PGSIZE) {
-			struct page *page = check_address(addr, rsp);
-			if (page == NULL || page->writable != to_write) 
-				exit(-1);
-		}
-	}
-}
+// 	// Case 1. buffer의 크기가 한 페이지를 넘지 않는 경우
+// 	if (pg_round_down(buf_addr) == pg_round_down(end_addr)) {
+// 		struct page *page = check_address(buffer, rsp);
+// 		if (page == NULL || page->writable != to_write) 
+// 			exit(-1);
+// 	}
+// 	// Case 2. buffer의 크기가 한 페이지를 넘는 경우
+// 	else {
+// 		for (uint8_t *addr = buf_addr; addr <= end_addr; addr += PGSIZE) {
+// 			struct page *page = check_address(addr, rsp);
+// 			if (page == NULL || page->writable != to_write) 
+// 				exit(-1);
+// 		}
+// 	}
+// }

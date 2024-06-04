@@ -23,7 +23,7 @@
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
-struct page *check_address (void *addr, void *rsp UNUSED);
+void check_address (void *addr);
 
 /* System Call Function */
 void halt (void);
@@ -72,21 +72,17 @@ syscall_init (void) {
 	lock_init(&filesys_lock);
 }
 
-/* Verify User Address */
-struct page *
-check_address (void *addr, void *rsp UNUSED) {
+void
+check_address (void *addr) {
 	if (addr == NULL || is_kernel_vaddr(addr))
 		exit(-1);
-	
-	if (spt_find_page(&thread_current()->spt, addr) == NULL)	exit(-1);
-	return spt_find_page(&thread_current()->spt, addr);
 }
 
 /* The main system call interface */
 void
 syscall_handler (struct intr_frame *f) {
 	// TODO: Your implementation goes here.
-	check_address(f->rsp, f->rsp);
+	check_address(f->rsp);
 
 	int syscall_number = f->R.rax;
 	void *arg1 = f->R.rdi;
@@ -162,7 +158,7 @@ fork (const char *thread_name) {
 
 int
 exec (const char *cmd_line) {
-	check_address(cmd_line, NULL);
+	check_address(cmd_line);
 
 	char *copy = palloc_get_page(PAL_ZERO);
 	if (copy == NULL)	exit(-1);
@@ -179,19 +175,19 @@ wait (tid_t tid) {
 /* =========== File System Related =========== */
 bool 
 create (const char *file, unsigned initial_size) {
-	check_address(file, NULL);
+	check_address(file);
 	return filesys_create(file, initial_size);
 }
 
 bool
 remove (const char *file) {
-	check_address(file, NULL);
+	check_address(file);
 	return filesys_remove(file);
 }
 
 int
 open (const char *file) {
-	check_address(file, NULL);
+	check_address(file);
 
 	struct file *open_file = filesys_open(file);
 	if (open_file == NULL) 		return -1;
@@ -215,7 +211,7 @@ filesize (int fd) {
 
 int 
 read (int fd, void *buffer, unsigned size) {
-	check_address(buffer, NULL);
+	check_address(buffer);
 	// check_valid_buffer(buffer, size, NULL, true);
 
 	if (fd == STDIN_FILENO) {
@@ -241,7 +237,7 @@ read (int fd, void *buffer, unsigned size) {
 int
 write (int fd, const void *buffer, unsigned size) {
     // check_valid_buffer(buffer, size, NULL, false);
-	check_address(buffer, NULL);
+	check_address(buffer);
 
 	if (fd == STDOUT_FILENO) {
         putbuf(buffer, size);

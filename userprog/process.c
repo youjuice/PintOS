@@ -731,14 +731,15 @@ lazy_load_segment (struct page *page, void *aux) {
 	off_t ofs = info->offset;
 	size_t page_read_bytes = info->read_bytes;
 	size_t page_zero_bytes = info->zero_bytes;
+	uintptr_t *kpage = page->frame->kva;
 
 	file_seek(file, ofs);
-	if (file_read(file, page->frame->kva, page_read_bytes) != (int)page_read_bytes) {
-		palloc_free_page(page->frame->kva);
+	if (file_read(file, kpage, page_read_bytes) != (int)page_read_bytes) {
+		palloc_free_page(kpage);
 		return false;
 	}
 
-	memset(page->frame->kva + page_read_bytes, 0, page_zero_bytes);
+	memset(kpage + page_read_bytes, 0, page_zero_bytes);
 	return true;
 }
 
@@ -801,7 +802,6 @@ setup_stack (struct intr_frame *if_) {
 	 * TODO: 페이지가 스택임을 표시해야 함 */
 	/* TODO: Your code goes here */
 	if (vm_alloc_page_with_initializer (VM_ANON | VM_MARKER_0, stack_bottom, true, NULL, NULL)) {
-		// vm_entry을 해시 테이블에 삽입
 		if (vm_claim_page(stack_bottom)) {
 			if_->rsp = USER_STACK;  // 스택 포인터를 USER_STACK으로 설정
 			return true;

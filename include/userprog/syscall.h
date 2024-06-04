@@ -5,6 +5,6 @@
 
 void syscall_init (void);
 struct lock filesys_lock;
-struct page *check_address (void *addr, void *rsp UNUSED);
+void check_address (void *addr);
 
 #endif /* userprog/syscall.h */
