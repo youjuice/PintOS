@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include "threads/palloc.h"
 #include "lib/kernel/hash.h"
+#include "lib/debug.h"
 #include "kernel/hash.h"
 
 enum vm_type {
@@ -19,7 +20,7 @@ enum vm_type {
 
 	/* Auxillary bit flag marker for store information. You can add more
 	 * markers, until the value is fit in the int. */
-	VM_MARKER_0 = (1 << 3),
+	VM_MARKER_0 = (1 << 3),		// Stack Frame 
 	VM_MARKER_1 = (1 << 4),
 
 	/* DO NOT EXCEED THIS VALUE. */
@@ -75,6 +76,14 @@ struct frame {
 	struct list_elem f_elem;
 };
 
+/* Load Info */
+struct load_info {
+	struct file *file;
+	off_t offset;
+	size_t read_bytes;
+	size_t zero_bytes;
+};
+
 /* The function table for page operations.
  * This is one way of implementing "interface" in C.
  * Put the table of "method" into the struct's member, and
@@ -113,8 +122,8 @@ bool vm_try_handle_fault (struct intr_frame *f, void *addr, bool user,
 		bool write, bool not_present);
 
 /* Custom Function */
-unsigned vm_hash_func (const struct hash_elem *e, void *aux);
-bool vm_less_func (const struct hash_elem *a, const struct hash_elem *b);
+unsigned vm_hash_func (struct hash_elem *e, void *aux);
+bool vm_less_func (struct hash_elem *a, struct hash_elem *b, void *aux);
 void check_valid_buffer (void *buffer, unsigned size, void *rsp, bool to_write);
 
 #define vm_alloc_page(type, upage, writable) \

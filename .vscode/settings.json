@@ -15,6 +15,7 @@
         "fstream": "c",
         "vm.h": "c",
         "intrinsic.h": "c",
-        "syscall.h": "c"
+        "syscall.h": "c",
+        "file.h": "c"
     }
 }

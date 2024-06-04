@@ -215,7 +215,8 @@ filesize (int fd) {
 
 int 
 read (int fd, void *buffer, unsigned size) {
-	check_valid_buffer(buffer, size, NULL, true);
+	check_address(buffer, NULL);
+	// check_valid_buffer(buffer, size, NULL, true);
 
 	if (fd == STDIN_FILENO) {
 		char *buf = buffer;
@@ -239,7 +240,8 @@ read (int fd, void *buffer, unsigned size) {
 
 int
 write (int fd, const void *buffer, unsigned size) {
-    check_valid_buffer(buffer, size, NULL, false);
+    // check_valid_buffer(buffer, size, NULL, false);
+	check_address(buffer, NULL);
 
 	if (fd == STDOUT_FILENO) {
         putbuf(buffer, size);

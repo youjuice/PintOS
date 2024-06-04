@@ -81,7 +81,6 @@ initd (void *f_name) {
 #ifdef VM
 	supplemental_page_table_init (&thread_current ()->spt);
 #endif
-
 	process_init ();						// 프로세스 초기화
 
 	if (process_exec (f_name) < 0)			// f_name에 지정된 프로그램 실행
@@ -238,7 +237,7 @@ process_exec (void *f_name) {
 
 	for (token = strtok_r(file_name, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
 		token_list[token_index++] = token;
-	
+
 	/* And then load the binary */
 	lock_acquire(&filesys_lock);
 	success = load (file_name, &_if);		// 주어진 파일을 로드하여 새로운 프로세스 시작
@@ -246,6 +245,7 @@ process_exec (void *f_name) {
 
 	/* If load failed, quit. */
 	if (!success) {
+		palloc_free_page (file_name);				// 페이지 해제
 		return -1;
 	}
 	
@@ -254,9 +254,6 @@ process_exec (void *f_name) {
 
 	/* Debug Code */
 	// hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
-
-	supplemental_page_table_init(NULL);			// 현재 스레드의 해시 테이블 초기화
-	palloc_free_page (file_name);				// 페이지 해제
 	
 	/* Start switched process. */
 	do_iret (&_if);								// _if에 저장된 새로운 실행 컨텍스트로 전환
@@ -565,11 +562,11 @@ load (const char *file_name, struct intr_frame *if_) {
 	/* Set up stack. */
 	if (!setup_stack (if_))
 		goto done;
-	
+
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
 	success = true;
-	
+
 done:
 	/* We arrive here whether the load is successful or not. */
 	// file_close (file);
@@ -729,20 +726,19 @@ lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
-	struct file_page *file_page = &page->file;
-	struct file *file = file_page->file;
+	struct load_info *info = (struct load_info *)aux;
+	struct file *file = info->file;
+	off_t ofs = info->offset;
+	size_t page_read_bytes = info->read_bytes;
+	size_t page_zero_bytes = info->zero_bytes;
 
-	off_t ofs = file_page->offset;
-	uint32_t page_read_bytes = file_page->read_bytes;
-	uint32_t page_zero_bytes = file_page->zero_bytes;
-	uint8_t *kpage = page->frame->kva;
-
-	if (file_read_at(file, kpage, page, ofs) != page_read_bytes) {
+	file_seek(file, ofs);
+	if (file_read(file, page->frame->kva, page_read_bytes) != (int)page_read_bytes) {
 		palloc_free_page(page->frame->kva);
 		return false;
 	}
 
-	memset(kpage + page_read_bytes, 0, page_zero_bytes);
+	memset(page->frame->kva + page_read_bytes, 0, page_zero_bytes);
 	return true;
 }
 
@@ -775,19 +771,16 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-		// lazy_load_segment 함수를 사용하여 페이지를 초기화하는 vm_alloc_page_with_initializer 호출
-		if (!vm_alloc_page_with_initializer (VM_FILE, upage, writable, lazy_load_segment, NULL))
-			return false;
-
 		/* Create & Initialize page */
-		struct page *page = malloc(sizeof(struct page));
+		struct load_info *info = malloc(sizeof(struct load_info));
+		info->file = file;
+		info->offset = ofs;
+		info->read_bytes = page_read_bytes;
+		info->zero_bytes = page_zero_bytes;
 
-		page->file.file = file;
-		page->va = upage;
-		page->file.offset = ofs;
-		page->file.read_bytes = page_read_bytes;
-		page->file.zero_bytes = page_zero_bytes;
-		page->writable = writable;
+		// lazy_load_segment 함수를 사용하여 페이지를 초기화하는 vm_alloc_page_with_initializer 호출
+		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable, lazy_load_segment, info))
+			return false;
 
 		/* Advance. */
 		read_bytes -= page_read_bytes;
@@ -801,35 +794,19 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a PAGE of stack at the USER_STACK. Return true on success. */
 static bool
 setup_stack (struct intr_frame *if_) {
-	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
 
 	/* TODO: stack_bottom에 스택 매핑 후 즉시 페이지 할당
 	 * TODO: 성공하면, rsp를 적절하게 설정
 	 * TODO: 페이지가 스택임을 표시해야 함 */
 	/* TODO: Your code goes here */
-	if (vm_alloc_page_with_initializer (VM_ANON, stack_bottom, true, NULL, NULL)) {
-		// page 생성
-		struct page *page = malloc(sizeof(struct page));
-
-		// vm_entry 필드 초기화
-		// page->type = VM_ANON;
-		// page->va = stack_bottom;
-		// page->offset = 0;
-		// page->read_bytes = 0;
-		// page->zero_bytes = PGSIZE;
-		// page->writable = true;
-		// page->is_loaded = true;
-		// page->file = NULL;
-
+	if (vm_alloc_page_with_initializer (VM_ANON | VM_MARKER_0, stack_bottom, true, NULL, NULL)) {
 		// vm_entry을 해시 테이블에 삽입
-		if (spt_insert_page(&thread_current()->spt, page)) {
-			success = true;
+		if (vm_claim_page(stack_bottom)) {
 			if_->rsp = USER_STACK;  // 스택 포인터를 USER_STACK으로 설정
+			return true;
 		}
-		else 			
-			free(page);				// 실패하면 free
 	}
-	return success;
+	return false;
 }
 #endif /* VM */
