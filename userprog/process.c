@@ -558,6 +558,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	}
 
 	t->running_file = file;		// 현재 스레드의 실행 파일 설정
+	// file_deny_write(file);
 
 	/* Set up stack. */
 	if (!setup_stack (if_))
@@ -727,19 +728,15 @@ lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
 	struct load_info *info = (struct load_info *)aux;
-	struct file *file = info->file;
-	off_t ofs = info->offset;
-	size_t page_read_bytes = info->read_bytes;
-	size_t page_zero_bytes = info->zero_bytes;
-	uintptr_t *kpage = page->frame->kva;
+	// size_t page_read_bytes = info->read_bytes;
+	// size_t page_zero_bytes = info->zero_bytes;
 
-	file_seek(file, ofs);
-	if (file_read(file, kpage, page_read_bytes) != (int)page_read_bytes) {
-		palloc_free_page(kpage);
+	file_seek(info->file, info->offset);
+	if (file_read(info->file, page->frame->kva, info->read_bytes) != (int)info->read_bytes) {
+		palloc_free_page(page->frame->kva);
 		return false;
 	}
-
-	memset(kpage + page_read_bytes, 0, page_zero_bytes);
+	memset(page->frame->kva + info->read_bytes, 0, info->zero_bytes);
 	return true;
 }
 

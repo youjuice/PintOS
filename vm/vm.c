@@ -5,7 +5,9 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include "userprog/syscall.h"
+#include "userprog/process.h"
 #include "threads/mmu.h"
+#include "lib/string.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -218,6 +220,30 @@ supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		struct supplemental_page_table *src UNUSED) {
+			struct hash_iterator it;
+			hash_first(&it, &src->pages);
+			while(hash_next(&it)) {
+				struct page *src_page = hash_entry(hash_cur(&it), struct page, h_elem);
+				enum vm_type type = src_page->operations->type;
+
+				switch(VM_TYPE(type)) {
+					case VM_UNINIT:
+						if (!vm_alloc_page_with_initializer(VM_ANON, src_page->va, src_page->writable, src_page->uninit.init, src_page->uninit.aux))
+							return false;
+						continue;
+					case VM_ANON:
+						if (!vm_alloc_page_with_initializer(VM_ANON, src_page->va, src_page->writable, NULL, NULL))
+							return false;
+						break;
+				}
+				if (vm_claim_page(src_page->va)) {
+					struct page *new_page = spt_find_page(dst, src_page->va);
+					memcpy(new_page->frame->kva, src_page->frame->kva, PGSIZE);
+				}
+				else 
+					return false;
+			}
+			return true;
 }
 
 /* Free the resource hold by the supplemental page table */
@@ -225,8 +251,8 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	hash_clear(&spt->pages, page_destroy_func);
 }
-
 
 /* ========== Custom Function ========== */
 unsigned
@@ -240,6 +266,13 @@ vm_less_func (struct hash_elem *a, struct hash_elem *b, void *aux) {
 	struct page *page_a = hash_entry(a, struct page, h_elem);
 	struct page *page_b = hash_entry(b, struct page, h_elem);
 	return page_a->va < page_b->va;
+}
+
+void 
+page_destroy_func(struct hash_elem *hash_elem) {
+	struct page *page = hash_entry(hash_elem, struct page, h_elem);
+	destroy(page);
+	free(page);
 }
 
 // // For syscall.c

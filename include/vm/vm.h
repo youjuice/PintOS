@@ -124,6 +124,7 @@ bool vm_try_handle_fault (struct intr_frame *f, void *addr, bool user,
 /* Custom Function */
 unsigned vm_hash_func (struct hash_elem *e, void *aux);
 bool vm_less_func (struct hash_elem *a, struct hash_elem *b, void *aux);
+void page_destroy_func(struct hash_elem *hash_elem);
 void check_valid_buffer (void *buffer, unsigned size, void *rsp, bool to_write);
 
 #define vm_alloc_page(type, upage, writable) \
