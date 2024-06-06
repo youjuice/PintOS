@@ -798,9 +798,9 @@ setup_stack (struct intr_frame *if_) {
 	 * TODO: 성공하면, rsp를 적절하게 설정
 	 * TODO: 페이지가 스택임을 표시해야 함 */
 	/* TODO: Your code goes here */
-	if (vm_alloc_page_with_initializer (VM_ANON | VM_MARKER_0, stack_bottom, true, NULL, NULL)) {
+	if (vm_alloc_page (VM_ANON | VM_MARKER_0, stack_bottom, true)) {
 		if (vm_claim_page(stack_bottom)) {
-			if_->rsp = USER_STACK;  // 스택 포인터를 USER_STACK으로 설정
+			if_->rsp = USER_STACK;  // 스택 포인터를 USER_STACK으로 설정 (rsp는 스택의 최상단)
 			return true;
 		}
 	}

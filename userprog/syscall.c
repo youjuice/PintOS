@@ -89,6 +89,8 @@ syscall_handler (struct intr_frame *f) {
 	void *arg2 = f->R.rsi;
 	void *arg3 = f->R.rdx;
 
+	thread_current()->rsp = f->rsp;		// For "Stack Growth"
+
 	switch(syscall_number) {
 		case SYS_HALT : 
 			halt();

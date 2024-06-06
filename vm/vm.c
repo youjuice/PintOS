@@ -147,6 +147,7 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr UNUSED) {
+	vm_alloc_page(VM_ANON | VM_MARKER_0, addr, true);
 }
 
 /* Handle the fault on write_protected page */
@@ -168,6 +169,17 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	
 	// 얘는 가짜 페이지 폴트..
 	if (not_present) {
+		/* 
+		 * < Stack Growth >
+		 * - USER 모드에서의 페이지 폴트라면 현재 rsp를 그대로 사용 가능
+		 * - But, KERNEL 모드에서의 페이지 폴트라면 유저 모드에서 커널 모드로 전환될 때 저장해둔 rsp를 가져와야 함!!
+		 */
+		void *rsp_stack = user ? f->rsp : thread_current()->rsp;
+		if (USER_STACK > addr && addr > USER_STACK - (1 << 20)) {
+			if (addr >= rsp_stack - 8)
+				vm_stack_growth(pg_round_down(addr));
+		}
+
 		struct page *page = spt_find_page(spt, addr);
 		if (page == NULL)
 			return false;
@@ -232,7 +244,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 							return false;
 						continue;
 					case VM_ANON:
-						if (!vm_alloc_page_with_initializer(VM_ANON, src_page->va, src_page->writable, NULL, NULL))
+						if (!vm_alloc_page(VM_ANON, src_page->va, src_page->writable))
 							return false;
 						break;
 				}
@@ -275,7 +287,7 @@ page_destroy_func(struct hash_elem *hash_elem) {
 	free(page);
 }
 
-// // For syscall.c
+// For syscall.c
 // void
 // check_valid_buffer (void *buffer, unsigned size, void *rsp, bool to_write) {
 // 	uint8_t *buf_addr = (uint8_t *)buffer;
