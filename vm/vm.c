@@ -170,7 +170,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	// 얘는 가짜 페이지 폴트..
 	if (not_present) {
 		/* 
-		 * < Stack Growth >
+		 * [ Stack Growth ]
 		 * - USER 모드에서의 페이지 폴트라면 현재 rsp를 그대로 사용 가능
 		 * - But, KERNEL 모드에서의 페이지 폴트라면 유저 모드에서 커널 모드로 전환될 때 저장해둔 rsp를 가져와야 함!!
 		 */
