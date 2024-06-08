@@ -53,6 +53,7 @@ struct page {
 	struct hash_elem h_elem;
 	// struct list_elem m_elem;
 	// size_t swap_slot;
+	int map_page_cnt;
 
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
@@ -60,6 +61,7 @@ struct page {
 		struct uninit_page uninit;
 		struct anon_page anon;
 		struct file_page file;
+
 #ifdef EFILESYS
 		struct page_cache page_cache;
 #endif
@@ -67,7 +69,8 @@ struct page {
 };
 
 /* Frame Table list */
-static struct list frame_table;
+struct list frame_table;
+struct list mmap_list;
 
 /* The representation of "frame" */
 struct frame {

@@ -353,11 +353,8 @@ process_exit (void) {
 	
 	// 3. 남은 자원 정리
 	process_cleanup ();
-	
-	// 4. page들 제거
-	hash_destroy(&thread_current()->spt.pages, vm_destroy_func);
 
-	// 5. 동기화 (wait_sema & free_sema)
+	// 4. 동기화 (wait_sema & free_sema)
 	sema_up(&curr->wait_sema);
 	sema_down(&curr->free_sema);
 }
@@ -457,7 +454,7 @@ struct ELF64_PHDR {
 
 static bool setup_stack (struct intr_frame *if_);
 static bool validate_segment (const struct Phdr *, struct file *);
-static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
+bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes,
 		bool writable);
 
@@ -722,14 +719,12 @@ install_page (void *upage, void *kpage, bool writable) {
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
 
-static bool
+bool
 lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
 	struct load_info *info = (struct load_info *)aux;
-	// size_t page_read_bytes = info->read_bytes;
-	// size_t page_zero_bytes = info->zero_bytes;
 
 	file_seek(info->file, info->offset);
 	if (file_read(info->file, page->frame->kva, info->read_bytes) != (int)info->read_bytes) {
@@ -754,7 +749,7 @@ lazy_load_segment (struct page *page, void *aux) {
  *
  * Return true if successful, false if a memory allocation error
  * or disk read error occurs. */
-static bool
+bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);	// 총 바이트 수가 페이지 크기의 배수인지 확인

@@ -40,6 +40,8 @@ int write (int fd, const void *buffer, unsigned size);
 void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
+void *mmap (void *addr, size_t length, int writable, int fd, off_t offset);
+void munmap (void *addr);
 
 /* File System Lock */
 struct lock filesys_lock;
@@ -88,6 +90,8 @@ syscall_handler (struct intr_frame *f) {
 	void *arg1 = f->R.rdi;
 	void *arg2 = f->R.rsi;
 	void *arg3 = f->R.rdx;
+	void *arg4 = f->R.r10;
+	void *arg5 = f->R.r8;
 
 	thread_current()->rsp = f->rsp;		// For "Stack Growth"
 
@@ -134,6 +138,12 @@ syscall_handler (struct intr_frame *f) {
 			break;
 		case SYS_CLOSE :
 			close(arg1);
+			break;
+		case SYS_MMAP :
+			f->R.rax = mmap(arg1, arg2, arg3, arg4, arg5);
+			break;
+		case SYS_MUNMAP :
+			munmap(arg1);
 			break;
 	}
 }
@@ -199,7 +209,6 @@ open (const char *file) {
 
 	int fd = add_file(open_file);
 	if (fd == -1)	file_close(open_file);
-
 	return fd;
 }
 
@@ -282,4 +291,36 @@ close (int fd) {
 		file_close(file);
 		set_file(fd, NULL);
 	}	
+}
+
+void *
+mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
+	if ((int)length <= 0)
+		return NULL;
+
+	if (offset % PGSIZE != 0)
+		return NULL;
+	
+	if (addr == NULL || addr != pg_round_down(addr)) 
+		return NULL;
+	
+	if (!is_user_vaddr(addr) || !is_user_vaddr(addr + length))
+		return NULL;
+	
+	if (spt_find_page(&thread_current()->spt, addr) != NULL) 
+		return NULL;
+	
+	if (fd == STDIN_FILENO || fd == STDOUT_FILENO) 
+		return NULL;
+	
+	struct file *file = get_file(fd);
+	if (file == NULL) 
+		return NULL;
+
+	return do_mmap(addr, length, writable, file, offset);
+}
+
+void 
+munmap (void *addr) {
+	do_munmap(addr);
 }
