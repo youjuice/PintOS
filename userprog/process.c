@@ -239,9 +239,9 @@ process_exec (void *f_name) {
 		token_list[token_index++] = token;
 
 	/* And then load the binary */
-	lock_acquire(&filesys_lock);
+	sema_down(&filesys_sema);
 	success = load (file_name, &_if);		// 주어진 파일을 로드하여 새로운 프로세스 시작
-	lock_release(&filesys_lock);
+	sema_up(&filesys_sema);
 
 	/* If load failed, quit. */
 	if (!success) {
@@ -486,6 +486,9 @@ load (const char *file_name, struct intr_frame *if_) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
 	}
+
+	t->running_file = file;		// 현재 스레드의 실행 파일 설정
+	file_deny_write(file);
 	
 	/* Read and verify executable header. */
 	/* ELF 헤더를 읽고 검증, 올바른 ELF 파일인지 확인 */
@@ -553,9 +556,6 @@ load (const char *file_name, struct intr_frame *if_) {
 				break;
 		}
 	}
-
-	t->running_file = file;		// 현재 스레드의 실행 파일 설정
-	// file_deny_write(file);
 
 	/* Set up stack. */
 	if (!setup_stack (if_))

@@ -51,7 +51,6 @@ struct page {
 	/* Your implementation */
 	bool writable;
 	struct hash_elem h_elem;
-	// struct list_elem m_elem;
 	// size_t swap_slot;
 	int map_page_cnt;
 
@@ -70,13 +69,13 @@ struct page {
 
 /* Frame Table list */
 struct list frame_table;
-struct list mmap_list;
 
 /* The representation of "frame" */
 struct frame {
 	void *kva;
 	struct page *page;
 	struct list_elem f_elem;
+	uint8_t reference_bit;
 };
 
 /* Load Info */

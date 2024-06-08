@@ -43,9 +43,6 @@ void close (int fd);
 void *mmap (void *addr, size_t length, int writable, int fd, off_t offset);
 void munmap (void *addr);
 
-/* File System Lock */
-struct lock filesys_lock;
-
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler
@@ -71,7 +68,7 @@ syscall_init (void) {
 	write_msr(MSR_SYSCALL_MASK,
 			FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
 	
-	lock_init(&filesys_lock);
+	sema_init(&filesys_sema, 1);
 }
 
 void
@@ -94,7 +91,6 @@ syscall_handler (struct intr_frame *f) {
 	void *arg5 = f->R.r8;
 
 	thread_current()->rsp = f->rsp;		// For "Stack Growth"
-
 	switch(syscall_number) {
 		case SYS_HALT : 
 			halt();
@@ -188,7 +184,11 @@ wait (tid_t tid) {
 bool 
 create (const char *file, unsigned initial_size) {
 	check_address(file);
-	return filesys_create(file, initial_size);
+	
+	sema_down(&filesys_sema);
+	bool success = filesys_create(file, initial_size);
+	sema_up(&filesys_sema);
+	return success;
 }
 
 bool
@@ -200,15 +200,18 @@ remove (const char *file) {
 int
 open (const char *file) {
 	check_address(file);
+	sema_down(&filesys_sema);
 
 	struct file *open_file = filesys_open(file);
-	if (open_file == NULL) 		return -1;
 
-	if(strcmp(thread_name(), file) == 0) 
-		file_deny_write(open_file);
+	if (open_file == NULL) {
+		sema_up(&filesys_sema);
+		return -1;
+	}
 
 	int fd = add_file(open_file);
 	if (fd == -1)	file_close(open_file);
+	sema_up(&filesys_sema);
 	return fd;
 }
 
@@ -225,23 +228,31 @@ read (int fd, void *buffer, unsigned size) {
 	check_address(buffer);
 	// check_valid_buffer(buffer, size, NULL, true);
 
+	sema_down(&filesys_sema);
 	if (fd == STDIN_FILENO) {
 		char *buf = buffer;
 		for (int i = 0; i < size; i++) {
 			buf[i] = input_getc();
 		}
+		sema_up(&filesys_sema);
 		return size;
 	}
-	
-	lock_acquire(&filesys_lock);
+
 	struct file *file = get_file(fd);
 	if (file == NULL) {
-		lock_release(&filesys_lock);
+		sema_up(&filesys_sema);
 		return -1;
 	}
 
+	// for "page-merge" test
+	struct page *page = spt_find_page(&thread_current()->spt, buffer);
+    if (page && !page->writable) {
+        sema_up(&filesys_sema);
+        exit(-1);
+    }
+
 	int result = file_read(file, buffer, size);
-	lock_release(&filesys_lock);
+	sema_up(&filesys_sema);
 	return result;
 }
 
@@ -250,20 +261,21 @@ write (int fd, const void *buffer, unsigned size) {
     // check_valid_buffer(buffer, size, NULL, false);
 	check_address(buffer);
 
+    sema_down(&filesys_sema);
 	if (fd == STDOUT_FILENO) {
         putbuf(buffer, size);
+		sema_up(&filesys_sema);
         return size;
     } 
 
-    lock_acquire(&filesys_lock);
     struct file *file = get_file(fd);
     if (file == NULL) {
-		lock_release(&filesys_lock);
+		sema_up(&filesys_sema);
 		return -1;
 	}
 
 	int result = file_write(file, buffer, size);
-	lock_release(&filesys_lock);
+	sema_up(&filesys_sema);
     return result;
 }
 
