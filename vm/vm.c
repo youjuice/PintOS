@@ -108,9 +108,23 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 /* Get the struct frame, that will be evicted. */
 static struct frame *
 vm_get_victim (void) {
-	struct frame *victim = NULL;
 	 /* TODO: The policy for eviction is up to you. */
+	struct frame *victim = NULL;
 
+	for (struct list_elem *e = list_begin(&frame_table); e != list_end(&frame_table); e = list_next(e)) {
+		victim = list_entry(e, struct frame, f_elem);
+
+		if (victim->page == NULL) 
+			return victim;
+
+		if (pml4_is_accessed(thread_current()->pml4, victim->page->va)) {
+			pml4_set_accessed(thread_current()->pml4, victim->page->va, 0);
+			list_remove(e);
+			list_push_back(&frame_table, &victim->f_elem);
+		}
+		else 
+			return victim;
+	}
 	return victim;
 }
 
@@ -120,8 +134,9 @@ static struct frame *
 vm_evict_frame (void) {
 	struct frame *victim UNUSED = vm_get_victim ();
 	/* TODO: swap out the victim and return the evicted frame. */
-
-	return NULL;
+	list_remove(&victim->f_elem);
+	swap_out(victim->page);
+	return victim;
 }
 
 /* palloc() and get frame. If there is no available page, evict the page
@@ -216,7 +231,7 @@ vm_do_claim_page (struct page *page) {
 	page->frame = frame;
 
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
-	if(pml4_set_page(thread_current()->pml4, page->va, frame->kva, page->writable))
+	if(pml4_set_page(thread_current()->pml4, page->va, frame->kva, page->writable)) 
 		return swap_in (page, frame->kva);
 	else
 		return false;
@@ -320,4 +335,34 @@ page_destroy_func(struct hash_elem *hash_elem) {
 // 				exit(-1);
 // 		}
 // 	}
+// }
+
+/* 참조 비트 쉬프트 알고리즘 */
+/* Get the struct frame, that will be evicted. */
+// static struct frame *
+// vm_get_victim (void) {
+// 	 /* TODO: The policy for eviction is up to you. */
+// 	struct list_elem *min_reference_bit = list_min(&frame_table, bit_less_func, NULL);
+// 	struct frame *victim = list_entry(min_reference_bit, struct frame, f_elem);
+// 	return victim;
+// }
+
+// /* For min_reference_bit */
+// bool
+// bit_less_func (struct list_elem *a, struct list_elem *b, void *aux) {
+// 	struct frame *frame_a = list_entry(a, struct frame, f_elem);
+// 	struct frame *frame_b = list_entry(b, struct frame, f_elem);
+
+// 	return frame_a->reference_bit < frame_b->reference_bit;
+// }
+
+// /* Set Reference Bit */
+// void set_reference_bit(struct frame *frame) {
+// 	for (struct list_elem *e = list_begin(&frame_table); e != list_end(&frame_table); e = list_next(e)) {
+// 		struct frame *f = list_entry(e, struct frame, f_elem);
+// 		f->reference_bit >>= 1;
+// 	}
+
+// 	if (frame != NULL)
+// 		frame->reference_bit |= (1 << 7);
 // }

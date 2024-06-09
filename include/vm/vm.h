@@ -51,7 +51,6 @@ struct page {
 	/* Your implementation */
 	bool writable;
 	struct hash_elem h_elem;
-	// size_t swap_slot;
 	int map_page_cnt;
 
 	/* Per-type data are binded into the union.
@@ -75,7 +74,7 @@ struct frame {
 	void *kva;
 	struct page *page;
 	struct list_elem f_elem;
-	uint8_t reference_bit;
+	// uint8_t reference_bit;
 };
 
 /* Load Info */
@@ -127,7 +126,9 @@ bool vm_try_handle_fault (struct intr_frame *f, void *addr, bool user,
 unsigned vm_hash_func (struct hash_elem *e, void *aux);
 bool vm_less_func (struct hash_elem *a, struct hash_elem *b, void *aux);
 void page_destroy_func(struct hash_elem *hash_elem);
-void check_valid_buffer (void *buffer, unsigned size, void *rsp, bool to_write);
+// void check_valid_buffer (void *buffer, unsigned size, void *rsp, bool to_write);
+// bool bit_less_func (struct list_elem *a, struct list_elem *b, void *aux);
+// void set_reference_bit(struct frame *frame);
 
 #define vm_alloc_page(type, upage, writable) \
 	vm_alloc_page_with_initializer ((type), (upage), (writable), NULL, NULL)

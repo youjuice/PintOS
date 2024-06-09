@@ -8,7 +8,7 @@ enum vm_type;
 struct bitmap *swap_table;
 
 struct anon_page {
-    int sector_index;     // page가 저장된 sector 번호 (시작 번호)
+    int swap_index;     // page가 저장된 swap index
 };
 
 void vm_anon_init (void);

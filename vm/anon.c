@@ -25,7 +25,7 @@ vm_anon_init (void) {
 	swap_disk = disk_get(1, 1);
 
 	// (PGSIZE / DISK_SECTOR_SIZE) -> swap 공간에 넣을 수 있는 페이지 개수 (8)
-	int swap_disk_size = disk_size(swap_disk) / 8; 
+	size_t swap_disk_size = disk_size(swap_disk) / 8; 
 	swap_table = bitmap_create(swap_disk_size);
 }
 
@@ -36,6 +36,9 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	page->operations = &anon_ops;
 
 	struct anon_page *anon_page = &page->anon;
+	anon_page->swap_index = -1;
+
+	return true;
 }
 
 /* Swap in the page by read contents from the swap disk. */
@@ -43,19 +46,17 @@ static bool
 anon_swap_in (struct page *page, void *kva) {
 	struct anon_page *anon_page = &page->anon;
 
-	// 1. page 구조체에 sector index 설정
-	disk_sector_t start_sector = anon_page->sector_index;
-	anon_page->sector_index = -1;
-
-	// 2. 저장해둔 sector의 page를 8개로 분할해 read
+	// 1. page가 저장된 swap index 가져오기
+	int start_index = anon_page->swap_index;
+	printf("1. 여기 (index: %d)\n", start_index);
+	// 2. swap 공간에 저장해둔 page를 8개로 분할해 read
 	for (int i = 0; i < 8; i++) {
-		disk_read(swap_disk, start_sector + i, kva + (i * DISK_SECTOR_SIZE));
+		disk_read(swap_disk, start_index * 8 + i, kva + (i * DISK_SECTOR_SIZE));
 	}
-
+	printf("2. 여기\n");
 	// 3. swap-in 했으니 해당 슬롯 false 처리
-	int swap_index = start_sector / 8;
-	bitmap_set(swap_table, swap_index, false);
-
+	bitmap_set(swap_table, start_index, false);
+	printf("3. 여기\n");
 	return true;
 }
 
@@ -69,18 +70,15 @@ anon_swap_out (struct page *page) {
 	if (swap_index == BITMAP_ERROR)		return false;
 
 	// 2. 해당 sector에 page를 8개로 분할해 write
-	disk_sector_t start_sector = swap_index * 8;
-	uintptr_t *va = page->va;
-	
 	for (int i = 0; i < 8; i++) {
-		disk_write(swap_disk, start_sector + i, va + (i * DISK_SECTOR_SIZE));
+		disk_write(swap_disk, swap_index * 8 + i, page->va + (i * DISK_SECTOR_SIZE));
 	}
 
 	// 3. swap-out 한 페이지는 페이지 테이블에서 삭제
 	pml4_clear_page(thread_current()->pml4, page->va);
 
 	// 4. sector_index 업데이트
-	anon_page->sector_index = start_sector;
+	anon_page->swap_index = swap_index;
 
 	return true;
 }
