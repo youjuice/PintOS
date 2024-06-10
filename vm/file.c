@@ -47,6 +47,8 @@ file_backed_swap_in (struct page *page, void *kva) {
 
 	file_read_at(file_page->file, kva, file_page->read_bytes, file_page->offset);
 	memset(kva + file_page->read_bytes, 0, file_page->zero_bytes);
+
+	return true;
 }
 
 /* Swap out the page by writeback contents to the file. */
@@ -124,5 +126,5 @@ do_munmap (void *addr) {
 			destroy(page);
 		addr += PGSIZE;
 		page = spt_find_page(spt, addr);
-	}	
+	}
 }

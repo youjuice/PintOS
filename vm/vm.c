@@ -133,9 +133,8 @@ vm_get_victim (void) {
 static struct frame *
 vm_evict_frame (void) {
 	struct frame *victim UNUSED = vm_get_victim ();
-	/* TODO: swap out the victim and return the evicted frame. */
-	swap_out(victim->page);
-
+  	/* TODO: swap out the victim and return the evicted frame. */
+ 	swap_out(victim->page);
 	return victim;
 }
 
@@ -154,7 +153,7 @@ vm_get_frame (void) {
 		frame = vm_evict_frame();
 		frame->page = NULL;
 		return frame;
-	}
+	}					  
 								  
 	list_push_back(&frame_table, &frame->f_elem);
 	frame->page = NULL;
@@ -319,55 +318,3 @@ page_destroy_func(struct hash_elem *hash_elem) {
 	destroy(page);
 	free(page);
 }
-
-// For syscall.c
-// void
-// check_valid_buffer (void *buffer, unsigned size, void *rsp, bool to_write) {
-// 	uint8_t *buf_addr = (uint8_t *)buffer;
-// 	uint8_t *end_addr = buf_addr + size - 1;
-
-// 	// Case 1. buffer의 크기가 한 페이지를 넘지 않는 경우
-// 	if (pg_round_down(buf_addr) == pg_round_down(end_addr)) {
-// 		struct page *page = check_address(buffer, rsp);
-// 		if (page == NULL || page->writable != to_write) 
-// 			exit(-1);
-// 	}
-// 	// Case 2. buffer의 크기가 한 페이지를 넘는 경우
-// 	else {
-// 		for (uint8_t *addr = buf_addr; addr <= end_addr; addr += PGSIZE) {
-// 			struct page *page = check_address(addr, rsp);
-// 			if (page == NULL || page->writable != to_write) 
-// 				exit(-1);
-// 		}
-// 	}
-// }
-
-/* 참조 비트 쉬프트 알고리즘 */
-/* Get the struct frame, that will be evicted. */
-// static struct frame *
-// vm_get_victim (void) {
-// 	 /* TODO: The policy for eviction is up to you. */
-// 	struct list_elem *min_reference_bit = list_min(&frame_table, bit_less_func, NULL);
-// 	struct frame *victim = list_entry(min_reference_bit, struct frame, f_elem);
-// 	return victim;
-// }
-
-// /* For min_reference_bit */
-// bool
-// bit_less_func (struct list_elem *a, struct list_elem *b, void *aux) {
-// 	struct frame *frame_a = list_entry(a, struct frame, f_elem);
-// 	struct frame *frame_b = list_entry(b, struct frame, f_elem);
-
-// 	return frame_a->reference_bit < frame_b->reference_bit;
-// }
-
-// /* Set Reference Bit */
-// void set_reference_bit(struct frame *frame) {
-// 	for (struct list_elem *e = list_begin(&frame_table); e != list_end(&frame_table); e = list_next(e)) {
-// 		struct frame *f = list_entry(e, struct frame, f_elem);
-// 		f->reference_bit >>= 1;
-// 	}
-
-// 	if (frame != NULL)
-// 		frame->reference_bit |= (1 << 7);
-// }
