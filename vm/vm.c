@@ -113,7 +113,7 @@ vm_get_victim (void) {
 
 	for (struct list_elem *e = list_begin(&frame_table); e != list_end(&frame_table); e = list_next(e)) {
 		victim = list_entry(e, struct frame, f_elem);
-
+		
 		if (victim->page == NULL) 
 			return victim;
 
@@ -134,8 +134,8 @@ static struct frame *
 vm_evict_frame (void) {
 	struct frame *victim UNUSED = vm_get_victim ();
 	/* TODO: swap out the victim and return the evicted frame. */
-	list_remove(&victim->f_elem);
 	swap_out(victim->page);
+
 	return victim;
 }
 
@@ -145,14 +145,19 @@ vm_evict_frame (void) {
  * space.*/
 static struct frame *
 vm_get_frame (void) {
-	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
-	void *kva = palloc_get_page(PAL_USER); 
+	struct frame *frame = (struct frame *)malloc(sizeof(struct frame)); 
+	frame->kva = palloc_get_page(PAL_USER); 
 
-	frame = (struct frame *)malloc(sizeof(struct frame)); 
-	frame->kva = kva;									  
-	frame->page = NULL;
+	// 페이지 할당 실패 시, 페이지 교체
+	if (frame->kva == NULL) {
+		frame = vm_evict_frame();
+		frame->page = NULL;
+		return frame;
+	}
+								  
 	list_push_back(&frame_table, &frame->f_elem);
+	frame->page = NULL;
 
 	ASSERT(frame != NULL);
 	ASSERT(frame->page == NULL);

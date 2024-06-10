@@ -48,15 +48,14 @@ anon_swap_in (struct page *page, void *kva) {
 
 	// 1. page가 저장된 swap index 가져오기
 	int start_index = anon_page->swap_index;
-	printf("1. 여기 (index: %d)\n", start_index);
+
 	// 2. swap 공간에 저장해둔 page를 8개로 분할해 read
 	for (int i = 0; i < 8; i++) {
 		disk_read(swap_disk, start_index * 8 + i, kva + (i * DISK_SECTOR_SIZE));
 	}
-	printf("2. 여기\n");
+
 	// 3. swap-in 했으니 해당 슬롯 false 처리
 	bitmap_set(swap_table, start_index, false);
-	printf("3. 여기\n");
 	return true;
 }
 

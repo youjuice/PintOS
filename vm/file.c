@@ -99,10 +99,8 @@ do_mmap (void *addr, size_t length, int writable,
 		map_info->read_bytes = page_read_bytes;
 		map_info->zero_bytes = page_zero_bytes;
 
-		if (!vm_alloc_page_with_initializer(VM_FILE, addr, writable, lazy_load_segment, map_info)) {
-			file_close(map_file);
+		if (!vm_alloc_page_with_initializer(VM_FILE, addr, writable, lazy_load_segment, map_info))
 			return NULL;
-		}
 
 		spt_find_page(&thread_current()->spt, addr)->map_page_cnt = page_cnt;
 
