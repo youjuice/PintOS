@@ -172,6 +172,13 @@ vm_stack_growth (void *addr UNUSED) {
 /* Handle the fault on write_protected page */
 static bool
 vm_handle_wp (struct page *page UNUSED) {
+	void *parent_kva = page->frame->kva;
+	page->frame->kva = palloc_get_page(PAL_USER);
+
+	memcpy(page->frame->kva, parent_kva, PGSIZE);
+	pml4_set_page(thread_current()->pml4, page->va, page->frame->kva, page->copy_writable);
+
+	return true;
 }
 
 /* Return true on success */
@@ -180,14 +187,17 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 
-	/* TODO: Validate the fault */
-	/* TODO: Your code goes here */
-	// 얘는 진짜 페이지 폴트!!
+	// 1. 유효성 검사
 	if (addr == NULL || is_kernel_vaddr(addr))
 		return false;
-	
-	// 얘는 가짜 페이지 폴트..
-	if (not_present) {
+
+	// 2. Copy-On-Write
+	struct page *page = spt_find_page(spt, addr);
+	if (write && !not_present && page->copy_writable && page)
+		return vm_handle_wp(page);
+
+	// 3. Stack Growth
+	if (page == NULL) {
 		/* 
 		 * [ Stack Growth ]
 		 * - USER 모드에서의 페이지 폴트라면 현재 rsp를 그대로 사용 가능
@@ -195,18 +205,20 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		 */
 		void *rsp_stack = user ? f->rsp : thread_current()->rsp;
 		if (USER_STACK > addr && addr > USER_STACK - (1 << 20)) {
-			if (addr >= rsp_stack - 8)
+			if (addr >= rsp_stack - 8) {
 				vm_stack_growth(pg_round_down(addr));
+				page = spt_find_page(spt, addr);
+				return vm_do_claim_page (page);
+			}
 		}
-
-		struct page *page = spt_find_page(spt, addr);
-		if (page == NULL)
-			return false;
-		if (write == true && page->writable == false)
-			return false;
-		return vm_do_claim_page (page);
+		return false;
 	}
-	return false;
+
+	// 4. 쓰기 접근인데 페이지가 읽기 전용인 경우
+	if (write == true && page->writable == false)
+		return false;
+
+	return vm_do_claim_page (page);
 }
 
 /* Free the page.
@@ -261,10 +273,22 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 					case VM_UNINIT:
 						if (!vm_alloc_page_with_initializer(VM_ANON, src_page->va, src_page->writable, src_page->uninit.init, src_page->uninit.aux))
 							return false;
-						continue;
+						break;
 					case VM_ANON:
 						if (!vm_alloc_page(VM_ANON, src_page->va, src_page->writable))
 							return false;
+						struct page *new_page = spt_find_page(dst, src_page->va);
+						struct frame *new_frame = malloc(sizeof(struct frame));
+
+						new_page->copy_writable = src_page->writable;
+						new_page->frame = new_frame;
+						new_frame->page = new_page;
+						new_frame->kva = src_page->frame->kva;
+
+						list_push_back(&frame_table, &new_frame->f_elem);
+						if (!pml4_set_page(thread_current()->pml4, new_page->va, new_frame->kva, 0))
+							return false;
+						swap_in(new_page, new_frame->kva);
 						break;
 					case VM_FILE: {
 						struct load_info *copy_info = malloc(sizeof(struct load_info));
@@ -275,17 +299,11 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 
 						if (!vm_alloc_page_with_initializer(VM_FILE, src_page->va, src_page->writable, NULL, copy_info))
 							return false;
-						continue;
+						break;
 					}
 					default:
 						return false;
 				}
-				if (vm_claim_page(src_page->va)) {
-					struct page *new_page = spt_find_page(dst, src_page->va);
-					memcpy(new_page->frame->kva, src_page->frame->kva, PGSIZE);
-				}
-				else
-					return false;
 			}
 			return true;
 }

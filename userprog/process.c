@@ -201,13 +201,13 @@ __do_fork (void *aux) {
 	sema_up(&current->fork_sema);	// 초기화 완료 -> 부모 스레드 진행 !!
 	
 	/* Finally, switch to the newly created process. */
-	if (succ)				// 성공하면,
-		do_iret (&if_);		// 새로운 프로세스로 전환
+	if (succ)						// 성공하면,
+		do_iret (&if_);				// 새로운 프로세스로 전환
 
-error:						// 오류 발생시,
+error:								// 오류 발생시,
 	current->exit_status = TID_ERROR;
 	sema_up(&current->fork_sema);
-	thread_exit();				// 스레드 종료
+	thread_exit();					// 스레드 종료
 }
 
 /* Switch the current execution context to the f_name.
@@ -367,6 +367,7 @@ process_cleanup (void) {
 
 #ifdef VM
 	supplemental_page_table_kill (&curr->spt);
+	return;
 #endif
 
 	uint64_t *pml4;
