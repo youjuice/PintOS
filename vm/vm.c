@@ -198,7 +198,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 
 	// 2. Copy-On-Write
 	struct page *page = spt_find_page(spt, addr);
-	if (write && !not_present && page->copy_writable && page)
+	if (write && !not_present && page->origin_writable && page)
 		return vm_handle_wp(page);
 
 	// 3. Stack Growth
@@ -282,9 +282,10 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 					case VM_ANON:
 						if (!vm_alloc_page(VM_ANON, src_page->va, src_page->writable))
 							return false;
-						
+							
+						/* Copy-On-Write */
 						struct page *new_page = spt_find_page(dst, src_page->va);
-						new_page->copy_writable = src_page->writable;
+						new_page->origin_writable = src_page->writable;
 						new_page->writable = false;
 						new_page->frame = src_page->frame;
 

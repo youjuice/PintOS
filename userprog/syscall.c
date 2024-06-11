@@ -226,7 +226,6 @@ filesize (int fd) {
 int 
 read (int fd, void *buffer, unsigned size) {
 	check_address(buffer);
-	// check_valid_buffer(buffer, size, NULL, true);
 
 	sema_down(&filesys_sema);
 	if (fd == STDIN_FILENO) {
@@ -246,7 +245,7 @@ read (int fd, void *buffer, unsigned size) {
 
 	// for "write-code2" test
 	struct page *page = spt_find_page(&thread_current()->spt, buffer);
-    if (page && !page->copy_writable && !page->writable) {
+    if (page && !page->origin_writable && !page->writable) {
         sema_up(&filesys_sema);
         exit(-1);
     }
@@ -258,7 +257,6 @@ read (int fd, void *buffer, unsigned size) {
 
 int
 write (int fd, const void *buffer, unsigned size) {
-    // check_valid_buffer(buffer, size, NULL, false);
 	check_address(buffer);
 
     sema_down(&filesys_sema);
@@ -305,6 +303,7 @@ close (int fd) {
 	}	
 }
 
+/* =========== Virtual Memory Related =========== */
 void *
 mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
 	if ((int)length <= 0)

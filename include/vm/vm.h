@@ -50,7 +50,7 @@ struct page {
 
 	/* Your implementation */
 	bool writable;
-	bool copy_writable;
+	bool origin_writable;
 	struct hash_elem h_elem;
 	int map_page_cnt;
 
