@@ -17,6 +17,7 @@
         "intrinsic.h": "c",
         "syscall.h": "c",
         "file.h": "c",
-        "*.inc": "c"
+        "*.inc": "c",
+        "stdbool.h": "c"
     }
 }
