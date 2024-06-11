@@ -172,13 +172,18 @@ vm_stack_growth (void *addr UNUSED) {
 /* Handle the fault on write_protected page */
 static bool
 vm_handle_wp (struct page *page UNUSED) {
-	void *parent_kva = page->frame->kva;
-	page->frame->kva = palloc_get_page(PAL_USER);
+	void *new_kva = palloc_get_page(PAL_USER);
+	memcpy(new_kva, page->frame->kva, PGSIZE);
 
-	memcpy(page->frame->kva, parent_kva, PGSIZE);
-	pml4_set_page(thread_current()->pml4, page->va, page->frame->kva, page->copy_writable);
+	struct frame *new_frame = malloc(sizeof(struct frame));
+	new_frame->kva = new_kva;
+    new_frame->page = page;
 
-	return true;
+    page->frame = new_frame;
+    page->writable = true;  // 이제 쓰기 가능
+
+	list_push_back(&frame_table, &new_frame->f_elem);
+    return pml4_set_page(thread_current()->pml4, page->va, new_kva, true);
 }
 
 /* Return true on success */
@@ -277,18 +282,16 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 					case VM_ANON:
 						if (!vm_alloc_page(VM_ANON, src_page->va, src_page->writable))
 							return false;
+						
 						struct page *new_page = spt_find_page(dst, src_page->va);
-						struct frame *new_frame = malloc(sizeof(struct frame));
-
 						new_page->copy_writable = src_page->writable;
-						new_page->frame = new_frame;
-						new_frame->page = new_page;
-						new_frame->kva = src_page->frame->kva;
+						new_page->writable = false;
+						new_page->frame = src_page->frame;
 
-						list_push_back(&frame_table, &new_frame->f_elem);
-						if (!pml4_set_page(thread_current()->pml4, new_page->va, new_frame->kva, 0))
+						list_push_back(&frame_table, &new_page->frame->f_elem);
+						if (!pml4_set_page(thread_current()->pml4, new_page->va, new_page->frame->kva, 0))
 							return false;
-						swap_in(new_page, new_frame->kva);
+						swap_in(new_page, new_page->frame->kva);
 						break;
 					case VM_FILE: {
 						struct load_info *copy_info = malloc(sizeof(struct load_info));

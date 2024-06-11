@@ -244,9 +244,9 @@ read (int fd, void *buffer, unsigned size) {
 		return -1;
 	}
 
-	// for "page-merge" test
+	// for "write-code2" test
 	struct page *page = spt_find_page(&thread_current()->spt, buffer);
-    if (page && !page->writable) {
+    if (page && !page->copy_writable && !page->writable) {
         sema_up(&filesys_sema);
         exit(-1);
     }

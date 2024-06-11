@@ -150,9 +150,8 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 	}
 
 	int global_ticks = get_global_ticks();
-	if (global_ticks <= ticks) {
+	if (global_ticks <= ticks)
 		thread_wakeup(ticks);
-	}
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
