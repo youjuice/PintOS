@@ -5,9 +5,10 @@
 
    See hash.h for basic information. */
 
-#include "hash.h"
+#include "kernel/hash.h"
 #include "../debug.h"
 #include "threads/malloc.h"
+#include "vm/vm.h"
 
 #define list_elem_to_hash_elem(LIST_ELEM)                       \
 	list_entry(LIST_ELEM, struct hash_elem, list_elem)
@@ -24,12 +25,12 @@ static void rehash (struct hash *);
 bool
 hash_init (struct hash *h,
 		hash_hash_func *hash, hash_less_func *less, void *aux) {
-	h->elem_cnt = 0;
-	h->bucket_cnt = 4;
+	h->elem_cnt = 0;		// 요소의 개수
+	h->bucket_cnt = 4;		// 해시 테이블의 초기 크기
 	h->buckets = malloc (sizeof *h->buckets * h->bucket_cnt);
-	h->hash = hash;
-	h->less = less;
-	h->aux = aux;
+	h->hash = hash;			// 해시 함수 설정
+	h->less = less;			// 비교 함수 설정
+	h->aux = aux;			
 
 	if (h->buckets != NULL) {
 		hash_clear (h, NULL);
@@ -77,6 +78,13 @@ hash_clear (struct hash *h, hash_action_func *destructor) {
    hash_insert(), hash_replace(), or hash_delete(), yields
    undefined behavior, whether done in DESTRUCTOR or
    elsewhere. */
+/* 해시 테이블 H를 소멸시킨다. 
+   
+   만약 DESTRUCTOR가 null이 아니라면, 해시의 각 요소에 대해 먼저 호출됨
+   DESTRUCTOR는 적절하다면 해시 요소에 사용된 메모리를 할당 해제할 수 있음
+   하지만 hash_clear(), hash_destroy(), hash_insert(), hash_replace(), hash_delete()
+   함수들 중 어떤 것을 사용하여도, 해시 테이블 H를 수정하는 것은 hash_clear()가 실행되는 동안
+   또는 DESTRUCTOR 내부나 다른 곳에서 실행되더라도 정의되지 않은 동작을 일으킴 */
 void
 hash_destroy (struct hash *h, hash_action_func *destructor) {
 	if (destructor != NULL)
@@ -88,15 +96,17 @@ hash_destroy (struct hash *h, hash_action_func *destructor) {
    no equal element is already in the table.
    If an equal element is already in the table, returns it
    without inserting NEW. */
+/* NEW를 해시 테이블 H에 삽입하고, 동일한 요소가 이미 테이블에 없다면 NULL 포인터 반환 
+   만약 동일한 요소가 이미 테이블에 있다면, NEW를 삽입하지 않고 해당 요소 반환 */
 struct hash_elem *
 hash_insert (struct hash *h, struct hash_elem *new) {
-	struct list *bucket = find_bucket (h, new);
-	struct hash_elem *old = find_elem (h, bucket, new);
+	struct list *bucket = find_bucket (h, new);				// 주어진 요소에 해당하는 해시 테이블의 버킷을 찾음
+	struct hash_elem *old = find_elem (h, bucket, new);		// 주어진 요소가 이미 해시 테이블에 있는지 확인
 
-	if (old == NULL)
-		insert_elem (h, bucket, new);
+	if (old == NULL)										// 동일한 요소가 없는 경우
+		insert_elem (h, bucket, new);						// 새로운 요소 버킷에 삽입
 
-	rehash (h);
+	rehash (h);												// 있다면, 재해시
 
 	return old;
 }
@@ -119,6 +129,8 @@ hash_replace (struct hash *h, struct hash_elem *new) {
 
 /* Finds and returns an element equal to E in hash table H, or a
    null pointer if no equal element exists in the table. */
+/* 해당 코드는 주어진 해시 테이블 H에서 요소 E와 동일한 요소를 찾아 반환하거나,
+   테이블에 동일한 요소가 없으면 null 포인터 반환 */
 struct hash_elem *
 hash_find (struct hash *h, struct hash_elem *e) {
 	return find_elem (h, find_bucket (h, e), e);
@@ -131,14 +143,19 @@ hash_find (struct hash *h, struct hash_elem *e) {
    If the elements of the hash table are dynamically allocated,
    or own resources that are, then it is the caller's
    responsibility to deallocate them. */
+/* 해시 테이블 H에서 E와 동일한 요소를 찾아 제거하고 반환 
+   동일한 요소가 테이블에 없으면 null 포인터 반환
+
+   해시 테이블의 요소가 동적으로 할당되었거나 자원을 소유하는 경우,
+   자원을 해제하는 책임은 호출자에게 있음 */
 struct hash_elem *
 hash_delete (struct hash *h, struct hash_elem *e) {
-	struct hash_elem *found = find_elem (h, find_bucket (h, e), e);
+	struct hash_elem *found = find_elem (h, find_bucket (h, e), e);		// 요소 검색
 	if (found != NULL) {
-		remove_elem (h, found);
-		rehash (h);
+		remove_elem (h, found);		// 요소가 있으면 제거
+		rehash (h);					// 해시 테이블 재해시
 	}
-	return found;
+	return found;					// 제거된 요소 반환, 요소가 없으면 NULL
 }
 
 /* Calls ACTION for each element in hash table H in arbitrary
@@ -275,7 +292,7 @@ uint64_t
 hash_int (int i) {
 	return hash_bytes (&i, sizeof i);
 }
-
+
 /* Returns the bucket in H that E belongs in. */
 static struct list *
 find_bucket (struct hash *h, struct hash_elem *e) {
@@ -392,3 +409,9 @@ remove_elem (struct hash *h, struct hash_elem *e) {
 	list_remove (&e->list_elem);
 }
 
+/* ======= Custom Function ======= */
+void vm_destroy_func(struct hash_elem *hash_elem)
+{
+	struct page *page = hash_entry(hash_elem, struct page, h_elem);
+	free(page);
+}

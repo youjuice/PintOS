@@ -148,8 +148,10 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 		if (timer_ticks() % 4 == 0)
 			recalculate_priority();
 	}
-	thread_wakeup(ticks);
 
+	int global_ticks = get_global_ticks();
+	if (global_ticks <= ticks)
+		thread_wakeup(ticks);
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

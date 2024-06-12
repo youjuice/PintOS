@@ -153,8 +153,7 @@ sema_test_helper (void *sema_) {
 	struct semaphore *sema = sema_;
 	int i;
 
-	for (i = 0; i < 10; i++)
-	{
+	for (i = 0; i < 10; i++) {
 		sema_down (&sema[0]);
 		sema_up (&sema[1]);
 	}
@@ -199,11 +198,12 @@ lock_acquire (struct lock *lock) {
 
 	struct thread *curr_thread = thread_current();
 
-	if (lock->holder != NULL)						// lock을 이미 점유하고 있는 스레드가 있다면,
-	{
+	if (lock->holder != NULL) {						// lock을 이미 점유하고 있는 스레드가 있다면,
 		curr_thread->wait_on_lock = lock;			// 현재 wait_on_lock에 lock 추가
 		list_insert_ordered(&lock->holder->donations, &curr_thread->d_elem, cmp_priority, NULL);
-		if (!thread_mlfqs)	donate_priority();		// 우선순위 기부
+		
+		if (!thread_mlfqs)	
+			donate_priority();		// 우선순위 기부
 	}
 
 	sema_down (&lock->semaphore);
@@ -241,13 +241,12 @@ lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
-	if (!thread_mlfqs)
-	{
+	if (!thread_mlfqs) {
 		// 1. lock을 잡고 있던 스레드를 기부 리스트를 순회하며 삭제 (Multiple Donation!!)
 		struct thread *curr_thread = thread_current();			
-		for (struct list_elem *e = list_begin(&curr_thread->donations); e != list_end(&curr_thread->donations); e = list_next(e))
-		{
+		for (struct list_elem *e = list_begin(&curr_thread->donations); e != list_end(&curr_thread->donations); e = list_next(e)) {
 			struct thread *e_thread = list_entry(e, struct thread, d_elem);
+
 			if (e_thread->wait_on_lock == lock)									// 해당 스레드가 대기하고 있던 lock이 release된 lock이라면,
 				list_remove(&e_thread->d_elem);									// 기부 리스트에서 삭제
 		}
@@ -360,34 +359,26 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 
 /* =========== Custom Function =========== */
 void 
-donate_priority()
-{
-	struct thread *curr_thread = thread_current();								// 현재 스레드
-	
-	for (int i = 0; i < 8; i++)													// 깊이 제한 (재귀)
-	{
-		while (curr_thread->wait_on_lock != NULL)
-		{
-			struct thread *hold_thread = curr_thread->wait_on_lock->holder;		// lock을 갖고있는 스레드
+donate_priority (void) {
+	struct thread *curr_thread = thread_current();							// 현재 스레드
 
-			if (curr_thread->priority > hold_thread->priority)					// 만약 hold_thread의 우선순위가 더 낮다면,
-			{
-				hold_thread->priority = curr_thread->priority;					// 우선순위 기부
-				curr_thread = hold_thread;										// nested donation
-			}
+	while (curr_thread->wait_on_lock != NULL) {
+		struct thread *hold_thread = curr_thread->wait_on_lock->holder;		// lock을 갖고있는 스레드
+
+		if (curr_thread->priority > hold_thread->priority) {				// 만약 hold_thread의 우선순위가 더 낮다면,
+			hold_thread->priority = curr_thread->priority;					// 우선순위 기부	
 		}
+		curr_thread = hold_thread;											// nested donation
 	}
 }
 
 void 
-update_priority()
-{
+update_priority (void) {
 	struct thread *curr_thread = thread_current();
 
 	curr_thread->priority = curr_thread->origin_priority;
 
-	if (!list_empty(&curr_thread->donations))		// Consider Multiple Donation
-	{
+	if (!list_empty(&curr_thread->donations)) {		// Consider Multiple Donation
 		struct thread *highest_donations = list_entry(list_front(&curr_thread->donations), struct thread, d_elem);
 
 		if (highest_donations->priority > curr_thread->priority)
@@ -396,8 +387,7 @@ update_priority()
 }
 
 bool
-cmp_semaphore_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
-{
+cmp_semaphore_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
 	const struct semaphore_elem *semaphore_elem_a = list_entry(a, struct semaphore_elem, elem);
 	const struct semaphore_elem *semaphore_elem_b = list_entry(b, struct semaphore_elem, elem);
 

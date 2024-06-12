@@ -16,6 +16,7 @@
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 #include "intrinsic.h"
+#include "vm/vm.h"
 
 #define STDIN_FILENO	0
 #define STDOUT_FILENO	1
@@ -39,9 +40,8 @@ int write (int fd, const void *buffer, unsigned size);
 void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
-
-/* File System Lock */
-struct lock filesys_lock;
+void *mmap (void *addr, size_t length, int writable, int fd, off_t offset);
+void munmap (void *addr);
 
 /* System call.
  *
@@ -68,14 +68,12 @@ syscall_init (void) {
 	write_msr(MSR_SYSCALL_MASK,
 			FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
 	
-	lock_init(&filesys_lock);
+	sema_init(&filesys_sema, 1);
 }
 
-/* Verify User Address */
 void
 check_address (void *addr) {
-	struct thread *curr_thread = thread_current();
-	if (addr == NULL || is_kernel_vaddr(addr) || pml4_get_page(curr_thread->pml4, addr) == NULL)
+	if (addr == NULL || is_kernel_vaddr(addr))
 		exit(-1);
 }
 
@@ -89,7 +87,10 @@ syscall_handler (struct intr_frame *f) {
 	void *arg1 = f->R.rdi;
 	void *arg2 = f->R.rsi;
 	void *arg3 = f->R.rdx;
+	void *arg4 = f->R.r10;
+	void *arg5 = f->R.r8;
 
+	thread_current()->rsp = f->rsp;		// For "Stack Growth"
 	switch(syscall_number) {
 		case SYS_HALT : 
 			halt();
@@ -134,6 +135,12 @@ syscall_handler (struct intr_frame *f) {
 		case SYS_CLOSE :
 			close(arg1);
 			break;
+		case SYS_MMAP :
+			f->R.rax = mmap(arg1, arg2, arg3, arg4, arg5);
+			break;
+		case SYS_MUNMAP :
+			munmap(arg1);
+			break;
 	}
 }
 
@@ -177,7 +184,11 @@ wait (tid_t tid) {
 bool 
 create (const char *file, unsigned initial_size) {
 	check_address(file);
-	return filesys_create(file, initial_size);
+	
+	sema_down(&filesys_sema);
+	bool success = filesys_create(file, initial_size);
+	sema_up(&filesys_sema);
+	return success;
 }
 
 bool
@@ -189,15 +200,18 @@ remove (const char *file) {
 int
 open (const char *file) {
 	check_address(file);
-	struct file *open_file = filesys_open(file);
-	if (open_file == NULL) 		return -1;
+	sema_down(&filesys_sema);
 
-	if(strcmp(thread_name(), file) == 0) 
-		file_deny_write(open_file);
+	struct file *open_file = filesys_open(file);
+
+	if (open_file == NULL) {
+		sema_up(&filesys_sema);
+		return -1;
+	}
 
 	int fd = add_file(open_file);
 	if (fd == -1)	file_close(open_file);
-
+	sema_up(&filesys_sema);
 	return fd;
 }
 
@@ -213,44 +227,53 @@ int
 read (int fd, void *buffer, unsigned size) {
 	check_address(buffer);
 
+	sema_down(&filesys_sema);
 	if (fd == STDIN_FILENO) {
 		char *buf = buffer;
 		for (int i = 0; i < size; i++) {
 			buf[i] = input_getc();
 		}
+		sema_up(&filesys_sema);
 		return size;
 	}
-	
-	lock_acquire(&filesys_lock);
+
 	struct file *file = get_file(fd);
 	if (file == NULL) {
-		lock_release(&filesys_lock);
+		sema_up(&filesys_sema);
 		return -1;
 	}
 
+	// for "write-code2" test
+	struct page *page = spt_find_page(&thread_current()->spt, buffer);
+    if (page && !page->origin_writable && !page->writable) {
+        sema_up(&filesys_sema);
+        exit(-1);
+    }
+
 	int result = file_read(file, buffer, size);
-	lock_release(&filesys_lock);
+	sema_up(&filesys_sema);
 	return result;
 }
 
 int
 write (int fd, const void *buffer, unsigned size) {
-    check_address(buffer);
+	check_address(buffer);
 
+    sema_down(&filesys_sema);
 	if (fd == STDOUT_FILENO) {
         putbuf(buffer, size);
+		sema_up(&filesys_sema);
         return size;
     } 
 
-    lock_acquire(&filesys_lock);
     struct file *file = get_file(fd);
     if (file == NULL) {
-		lock_release(&filesys_lock);
+		sema_up(&filesys_sema);
 		return -1;
 	}
 
 	int result = file_write(file, buffer, size);
-	lock_release(&filesys_lock);
+	sema_up(&filesys_sema);
     return result;
 }
 
@@ -278,4 +301,37 @@ close (int fd) {
 		file_close(file);
 		set_file(fd, NULL);
 	}	
+}
+
+/* =========== Virtual Memory Related =========== */
+void *
+mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
+	if ((int)length <= 0)
+		return NULL;
+
+	if (offset % PGSIZE != 0)
+		return NULL;
+	
+	if (addr == NULL || addr != pg_round_down(addr)) 
+		return NULL;
+	
+	if (!is_user_vaddr(addr) || !is_user_vaddr(addr + length))
+		return NULL;
+	
+	if (spt_find_page(&thread_current()->spt, addr) != NULL) 
+		return NULL;
+	
+	if (fd == STDIN_FILENO || fd == STDOUT_FILENO) 
+		return NULL;
+	
+	struct file *file = get_file(fd);
+	if (file == NULL) 
+		return NULL;
+
+	return do_mmap(addr, length, writable, file, offset);
+}
+
+void 
+munmap (void *addr) {
+	do_munmap(addr);
 }

@@ -2,6 +2,9 @@
 #define VM_VM_H
 #include <stdbool.h>
 #include "threads/palloc.h"
+#include "lib/kernel/hash.h"
+#include "lib/debug.h"
+#include "kernel/hash.h"
 
 enum vm_type {
 	/* page not initialized */
@@ -17,7 +20,7 @@ enum vm_type {
 
 	/* Auxillary bit flag marker for store information. You can add more
 	 * markers, until the value is fit in the int. */
-	VM_MARKER_0 = (1 << 3),
+	VM_MARKER_0 = (1 << 3),		// Stack Frame 
 	VM_MARKER_1 = (1 << 4),
 
 	/* DO NOT EXCEED THIS VALUE. */
@@ -46,6 +49,10 @@ struct page {
 	struct frame *frame;   /* Back reference for frame */
 
 	/* Your implementation */
+	bool writable;
+	bool origin_writable;
+	struct hash_elem h_elem;
+	int map_page_cnt;
 
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
@@ -53,16 +60,30 @@ struct page {
 		struct uninit_page uninit;
 		struct anon_page anon;
 		struct file_page file;
+
 #ifdef EFILESYS
 		struct page_cache page_cache;
 #endif
 	};
 };
 
+/* Frame Table list */
+struct list frame_table;
+
 /* The representation of "frame" */
 struct frame {
 	void *kva;
 	struct page *page;
+	struct list_elem f_elem;
+	// uint8_t reference_bit;
+};
+
+/* Load Info */
+struct load_info {
+	struct file *file;
+	off_t offset;
+	size_t read_bytes;
+	size_t zero_bytes;
 };
 
 /* The function table for page operations.
@@ -85,6 +106,7 @@ struct page_operations {
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
 struct supplemental_page_table {
+	struct hash pages;
 };
 
 #include "threads/thread.h"
@@ -95,11 +117,19 @@ void supplemental_page_table_kill (struct supplemental_page_table *spt);
 struct page *spt_find_page (struct supplemental_page_table *spt,
 		void *va);
 bool spt_insert_page (struct supplemental_page_table *spt, struct page *page);
-void spt_remove_page (struct supplemental_page_table *spt, struct page *page);
+bool spt_remove_page (struct supplemental_page_table *spt, struct page *page);
 
 void vm_init (void);
 bool vm_try_handle_fault (struct intr_frame *f, void *addr, bool user,
 		bool write, bool not_present);
+
+/* Custom Function */
+unsigned vm_hash_func (struct hash_elem *e, void *aux);
+bool vm_less_func (struct hash_elem *a, struct hash_elem *b, void *aux);
+void page_destroy_func(struct hash_elem *hash_elem);
+// void check_valid_buffer (void *buffer, unsigned size, void *rsp, bool to_write);
+// bool bit_less_func (struct list_elem *a, struct list_elem *b, void *aux);
+// void set_reference_bit(struct frame *frame);
 
 #define vm_alloc_page(type, upage, writable) \
 	vm_alloc_page_with_initializer ((type), (upage), (writable), NULL, NULL)

@@ -2,6 +2,7 @@
 #define THREADS_THREAD_H
 
 #define USERPROG
+#define VM
 
 #include <debug.h>
 #include <list.h>
@@ -10,6 +11,7 @@
 #include "threads/interrupt.h"
 #ifdef VM
 #include "vm/vm.h"
+#include "lib/kernel/hash.h"
 #endif
 
 
@@ -128,8 +130,8 @@ struct thread {
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;
+    uintptr_t *rsp;
 #endif
-
 	/* Owned by thread.c. */
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
