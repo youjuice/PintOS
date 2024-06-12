@@ -176,11 +176,11 @@ vm_handle_wp (struct page *page UNUSED) {
 	memcpy(new_kva, page->frame->kva, PGSIZE);
 
 	struct frame *new_frame = malloc(sizeof(struct frame));
-	new_frame->kva = new_kva;
+	new_frame->kva = new_kva;	// 새 프레임 할당
     new_frame->page = page;
 
     page->frame = new_frame;
-    page->writable = true;  // 이제 쓰기 가능
+    page->writable = true;  	// 이제 쓰기 가능
 
 	list_push_back(&frame_table, &new_frame->f_elem);
     return pml4_set_page(thread_current()->pml4, page->va, new_kva, true);
@@ -223,6 +223,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	if (write == true && page->writable == false)
 		return false;
 
+	// 5. Lazy-loading
 	return vm_do_claim_page (page);
 }
 
@@ -282,12 +283,12 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 					case VM_ANON:
 						if (!vm_alloc_page(VM_ANON, src_page->va, src_page->writable))
 							return false;
-							
+						
 						/* Copy-On-Write */
 						struct page *new_page = spt_find_page(dst, src_page->va);
 						new_page->origin_writable = src_page->writable;
-						new_page->writable = false;
-						new_page->frame = src_page->frame;
+						new_page->writable = false;			// 초기에는 읽기 전용 상태
+						new_page->frame = src_page->frame;	// 원본과 같은 물리 프레임 공유
 
 						list_push_back(&frame_table, &new_page->frame->f_elem);
 						if (!pml4_set_page(thread_current()->pml4, new_page->va, new_page->frame->kva, 0))
