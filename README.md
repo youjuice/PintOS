@@ -1,3 +1,3 @@
-Brand new pintos for Operating Systems and Lab (CS330), KAIST, by Youngjin Kwon.
+Project 1~3 ALL CLEAR!!
 
-The manual is available at https://casys-kaist.github.io/pintos-kaist/.
+Dev Diary for PintOS!! [Click Here](https://ringed-postage-dfc.notion.site/PintOS-e7be8de4a7944308bba8bd79cb3465bf?pvs=4)
